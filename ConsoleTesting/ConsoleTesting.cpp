@@ -9,10 +9,12 @@
 #include <unordered_set>
 #include <opencv2/opencv.hpp>
 #include <boost/filesystem.hpp>
-using namespace boost;
+#include <boost/algorithm/string.hpp>
+namespace fs = boost::filesystem;
 
-const static std::string FF8_ROOT = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\FINAL FANTASY VIII";
+const static std::string FF8_ROOT = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\FINAL FANTASY VIII\\";
 const static int BLOCKSIZE = 16;
+
 
 typedef struct coord {
 	int x;
@@ -33,6 +35,7 @@ coord hash1[64] = { coord{ 0, 0 }, coord{ 16, 0 }, coord{ 32, 0 }, coord{ 48, 0 
 //std::array<coord, 121> high_var_block64_121 = { coord{ 4, 7 }, coord{ 14, 9 }, coord{ 24, 10 }, coord{ 44, 2 }, coord{ 54, 2 }, coord{ 62, 2 }, coord{ 68, 2 }, coord{ 81, 3 }, coord{ 90, 9 }, coord{ 101, 11 }, coord{ 121, 8 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 27, 20 }, coord{ 38, 21 }, coord{ 54, 18 }, coord{ 63, 19 }, coord{ 72, 21 }, coord{ 80, 17 }, coord{ 99, 17 }, coord{ 103, 17 }, coord{ 119, 21 }, coord{ 8, 28 }, coord{ 13, 24 }, coord{ 30, 32 }, coord{ 40, 24 }, coord{ 54, 27 }, coord{ 57, 30 }, coord{ 73, 32 }, coord{ 84, 32 }, coord{ 94, 30 }, coord{ 110, 31 }, coord{ 112, 31 }, coord{ 3, 40 }, coord{ 20, 41 }, coord{ 28, 36 }, coord{ 38, 35 }, coord{ 52, 44 }, coord{ 57, 44 }, coord{ 72, 43 }, coord{ 83, 35 }, coord{ 98, 35 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 22, 54 }, coord{ 24, 55 }, coord{ 44, 48 }, coord{ 54, 51 }, coord{ 62, 52 }, coord{ 73, 54 }, coord{ 82, 54 }, coord{ 98, 54 }, coord{ 109, 55 }, coord{ 115, 50 }, coord{ 10, 62 }, coord{ 22, 57 }, coord{ 24, 57 }, coord{ 41, 64 }, coord{ 55, 61 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 84, 63 }, coord{ 91, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 11, 71 }, coord{ 22, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 63, 72 }, coord{ 68, 73 }, coord{ 87, 75 }, coord{ 94, 77 }, coord{ 101, 74 }, coord{ 118, 71 }, coord{ 9, 85 }, coord{ 19, 88 }, coord{ 31, 88 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 80 }, coord{ 77, 85 }, coord{ 87, 80 }, coord{ 97, 84 }, coord{ 104, 79 }, coord{ 121, 82 }, coord{ 2, 97 }, coord{ 22, 92 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 91 }, coord{ 71, 99 }, coord{ 79, 90 }, coord{ 97, 98 }, coord{ 108, 99 }, coord{ 121, 98 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 104 }, coord{ 36, 105 }, coord{ 55, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 93, 102 }, coord{ 110, 102 }, coord{ 112, 106 }, coord{ 3, 120 }, coord{ 20, 119 }, coord{ 26, 114 }, coord{ 35, 112 }, coord{ 50, 114 }, coord{ 63, 117 }, coord{ 76, 118 }, coord{ 79, 116 }, coord{ 99, 119 }, coord{ 105, 112 }, coord{ 120, 113 } };
 std::array<coord, 253> high_var_block128_253 = { coord{ 4, 7 }, coord{ 14, 9 }, coord{ 24, 10 }, coord{ 44, 2 }, coord{ 54, 2 }, coord{ 62, 2 }, coord{ 68, 2 }, coord{ 81, 3 }, coord{ 90, 9 }, coord{ 101, 11 }, coord{ 121, 8 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 27, 20 }, coord{ 38, 21 }, coord{ 54, 18 }, coord{ 63, 19 }, coord{ 72, 21 }, coord{ 80, 17 }, coord{ 99, 17 }, coord{ 103, 17 }, coord{ 119, 21 }, coord{ 8, 28 }, coord{ 13, 24 }, coord{ 30, 32 }, coord{ 40, 24 }, coord{ 54, 27 }, coord{ 57, 30 }, coord{ 73, 32 }, coord{ 84, 32 }, coord{ 94, 30 }, coord{ 110, 31 }, coord{ 112, 31 }, coord{ 3, 40 }, coord{ 20, 41 }, coord{ 28, 36 }, coord{ 38, 35 }, coord{ 52, 44 }, coord{ 57, 44 }, coord{ 72, 43 }, coord{ 83, 35 }, coord{ 98, 35 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 22, 54 }, coord{ 24, 55 }, coord{ 44, 48 }, coord{ 54, 51 }, coord{ 62, 52 }, coord{ 73, 54 }, coord{ 82, 54 }, coord{ 98, 54 }, coord{ 109, 55 }, coord{ 115, 50 }, coord{ 10, 62 }, coord{ 22, 57 }, coord{ 24, 57 }, coord{ 41, 64 }, coord{ 55, 61 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 84, 63 }, coord{ 91, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 11, 71 }, coord{ 22, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 63, 72 }, coord{ 68, 73 }, coord{ 87, 75 }, coord{ 94, 77 }, coord{ 101, 74 }, coord{ 118, 71 }, coord{ 9, 85 }, coord{ 19, 88 }, coord{ 31, 88 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 80 }, coord{ 77, 85 }, coord{ 87, 80 }, coord{ 97, 84 }, coord{ 104, 79 }, coord{ 121, 82 }, coord{ 2, 97 }, coord{ 22, 92 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 91 }, coord{ 71, 99 }, coord{ 79, 90 }, coord{ 97, 98 }, coord{ 108, 99 }, coord{ 121, 98 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 104 }, coord{ 36, 105 }, coord{ 55, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 93, 102 }, coord{ 110, 102 }, coord{ 112, 106 }, coord{ 3, 120 }, coord{ 20, 119 }, coord{ 26, 114 }, coord{ 35, 112 }, coord{ 50, 114 }, coord{ 63, 117 }, coord{ 76, 118 }, coord{ 79, 116 }, coord{ 99, 119 }, coord{ 105, 112 }, coord{ 120, 113 }, coord{ 3, 132 }, coord{ 15, 127 }, coord{ 31, 132 }, coord{ 44, 130 }, coord{ 49, 131 }, coord{ 64, 128 }, coord{ 69, 128 }, coord{ 79, 128 }, coord{ 94, 128 }, coord{ 104, 131 }, coord{ 120, 129 }, coord{ 5, 135 }, coord{ 16, 142 }, coord{ 27, 134 }, coord{ 39, 134 }, coord{ 53, 138 }, coord{ 57, 136 }, coord{ 69, 136 }, coord{ 83, 143 }, coord{ 99, 135 }, coord{ 104, 136 }, coord{ 119, 137 }, coord{ 4, 153 }, coord{ 22, 146 }, coord{ 28, 147 }, coord{ 44, 145 }, coord{ 54, 153 }, coord{ 64, 152 }, coord{ 74, 153 }, coord{ 88, 154 }, coord{ 98, 154 }, coord{ 110, 154 }, coord{ 118, 153 }, coord{ 10, 164 }, coord{ 22, 161 }, coord{ 28, 163 }, coord{ 44, 165 }, coord{ 48, 165 }, coord{ 58, 161 }, coord{ 68, 159 }, coord{ 82, 156 }, coord{ 98, 157 }, coord{ 110, 157 }, coord{ 118, 159 }, coord{ 8, 176 }, coord{ 15, 176 }, coord{ 25, 175 }, coord{ 44, 168 }, coord{ 52, 167 }, coord{ 62, 167 }, coord{ 68, 168 }, coord{ 79, 170 }, coord{ 98, 172 }, coord{ 104, 174 }, coord{ 114, 174 }, coord{ 5, 180 }, coord{ 22, 183 }, coord{ 25, 182 }, coord{ 37, 183 }, coord{ 55, 183 }, coord{ 61, 183 }, coord{ 73, 181 }, coord{ 79, 183 }, coord{ 95, 183 }, coord{ 107, 186 }, coord{ 119, 187 }, coord{ 8, 193 }, coord{ 16, 191 }, coord{ 31, 191 }, coord{ 44, 191 }, coord{ 48, 195 }, coord{ 61, 193 }, coord{ 70, 189 }, coord{ 80, 190 }, coord{ 96, 190 }, coord{ 106, 191 }, coord{ 115, 190 }, coord{ 10, 202 }, coord{ 16, 209 }, coord{ 28, 204 }, coord{ 44, 202 }, coord{ 50, 207 }, coord{ 66, 203 }, coord{ 76, 200 }, coord{ 86, 203 }, coord{ 90, 207 }, coord{ 106, 200 }, coord{ 118, 209 }, coord{ 8, 218 }, coord{ 16, 218 }, coord{ 26, 214 }, coord{ 36, 216 }, coord{ 48, 218 }, coord{ 62, 220 }, coord{ 74, 215 }, coord{ 86, 218 }, coord{ 90, 213 }, coord{ 110, 211 }, coord{ 118, 216 }, coord{ 2, 226 }, coord{ 22, 223 }, coord{ 30, 228 }, coord{ 44, 226 }, coord{ 50, 230 }, coord{ 66, 229 }, coord{ 72, 227 }, coord{ 80, 226 }, coord{ 98, 224 }, coord{ 110, 224 }, coord{ 114, 224 }, coord{ 10, 236 }, coord{ 20, 235 }, coord{ 26, 240 }, coord{ 38, 238 }, coord{ 48, 234 }, coord{ 66, 240 }, coord{ 74, 239 }, coord{ 86, 240 }, coord{ 98, 241 }, coord{ 104, 239 }, coord{ 120, 234 }, coord{ 8, 244 }, coord{ 20, 244 }, coord{ 28, 251 }, coord{ 38, 244 }, coord{ 54, 244 }, coord{ 60, 245 }, coord{ 70, 247 }, coord{ 84, 248 }, coord{ 92, 250 }, coord{ 108, 251 }, coord{ 120, 252 } };
 coord high_var_block128_collision44[297] = { coord{ 4, 7 }, coord{ 14, 9 }, coord{ 24, 10 }, coord{ 44, 2 }, coord{ 54, 2 }, coord{ 62, 2 }, coord{ 68, 2 }, coord{ 81, 3 }, coord{ 90, 9 }, coord{ 101, 11 }, coord{ 121, 8 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 27, 20 }, coord{ 38, 21 }, coord{ 54, 18 }, coord{ 63, 19 }, coord{ 72, 21 }, coord{ 80, 17 }, coord{ 99, 17 }, coord{ 103, 17 }, coord{ 119, 21 }, coord{ 8, 28 }, coord{ 13, 24 }, coord{ 30, 32 }, coord{ 40, 24 }, coord{ 54, 27 }, coord{ 57, 30 }, coord{ 73, 32 }, coord{ 84, 32 }, coord{ 94, 30 }, coord{ 110, 31 }, coord{ 112, 31 }, coord{ 3, 40 }, coord{ 20, 41 }, coord{ 28, 36 }, coord{ 38, 35 }, coord{ 52, 44 }, coord{ 57, 44 }, coord{ 72, 43 }, coord{ 83, 35 }, coord{ 98, 35 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 22, 54 }, coord{ 24, 55 }, coord{ 44, 48 }, coord{ 54, 51 }, coord{ 62, 52 }, coord{ 73, 54 }, coord{ 82, 54 }, coord{ 98, 54 }, coord{ 109, 55 }, coord{ 115, 50 }, coord{ 10, 62 }, coord{ 22, 57 }, coord{ 24, 57 }, coord{ 41, 64 }, coord{ 55, 61 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 84, 63 }, coord{ 91, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 11, 71 }, coord{ 22, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 63, 72 }, coord{ 68, 73 }, coord{ 87, 75 }, coord{ 94, 77 }, coord{ 101, 74 }, coord{ 118, 71 }, coord{ 9, 85 }, coord{ 19, 88 }, coord{ 31, 88 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 80 }, coord{ 77, 85 }, coord{ 87, 80 }, coord{ 97, 84 }, coord{ 104, 79 }, coord{ 121, 82 }, coord{ 2, 97 }, coord{ 22, 92 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 91 }, coord{ 71, 99 }, coord{ 79, 90 }, coord{ 97, 98 }, coord{ 108, 99 }, coord{ 121, 98 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 104 }, coord{ 36, 105 }, coord{ 55, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 93, 102 }, coord{ 110, 102 }, coord{ 112, 106 }, coord{ 3, 120 }, coord{ 20, 119 }, coord{ 26, 114 }, coord{ 35, 112 }, coord{ 50, 114 }, coord{ 63, 117 }, coord{ 76, 118 }, coord{ 79, 116 }, coord{ 99, 119 }, coord{ 105, 112 }, coord{ 120, 113 }, coord{ 3, 132 }, coord{ 15, 127 }, coord{ 31, 132 }, coord{ 44, 130 }, coord{ 49, 131 }, coord{ 64, 128 }, coord{ 69, 128 }, coord{ 79, 128 }, coord{ 94, 128 }, coord{ 104, 131 }, coord{ 120, 129 }, coord{ 5, 135 }, coord{ 16, 142 }, coord{ 27, 134 }, coord{ 39, 134 }, coord{ 53, 138 }, coord{ 57, 136 }, coord{ 69, 136 }, coord{ 83, 143 }, coord{ 99, 135 }, coord{ 104, 136 }, coord{ 119, 137 }, coord{ 4, 153 }, coord{ 22, 146 }, coord{ 28, 147 }, coord{ 44, 145 }, coord{ 54, 153 }, coord{ 64, 152 }, coord{ 74, 153 }, coord{ 88, 154 }, coord{ 98, 154 }, coord{ 110, 154 }, coord{ 118, 153 }, coord{ 10, 164 }, coord{ 22, 161 }, coord{ 28, 163 }, coord{ 44, 165 }, coord{ 48, 165 }, coord{ 58, 161 }, coord{ 68, 159 }, coord{ 82, 156 }, coord{ 98, 157 }, coord{ 110, 157 }, coord{ 118, 159 }, coord{ 8, 176 }, coord{ 15, 176 }, coord{ 25, 175 }, coord{ 44, 168 }, coord{ 52, 167 }, coord{ 62, 167 }, coord{ 68, 168 }, coord{ 79, 170 }, coord{ 98, 172 }, coord{ 104, 174 }, coord{ 114, 174 }, coord{ 5, 180 }, coord{ 22, 183 }, coord{ 25, 182 }, coord{ 37, 183 }, coord{ 55, 183 }, coord{ 61, 183 }, coord{ 73, 181 }, coord{ 79, 183 }, coord{ 95, 183 }, coord{ 107, 186 }, coord{ 119, 187 }, coord{ 8, 193 }, coord{ 16, 191 }, coord{ 31, 191 }, coord{ 44, 191 }, coord{ 48, 195 }, coord{ 61, 193 }, coord{ 70, 189 }, coord{ 80, 190 }, coord{ 96, 190 }, coord{ 106, 191 }, coord{ 115, 190 }, coord{ 10, 202 }, coord{ 16, 209 }, coord{ 28, 204 }, coord{ 44, 202 }, coord{ 50, 207 }, coord{ 66, 203 }, coord{ 76, 200 }, coord{ 86, 203 }, coord{ 90, 207 }, coord{ 106, 200 }, coord{ 118, 209 }, coord{ 8, 218 }, coord{ 16, 218 }, coord{ 26, 214 }, coord{ 36, 216 }, coord{ 48, 218 }, coord{ 62, 220 }, coord{ 74, 215 }, coord{ 86, 218 }, coord{ 90, 213 }, coord{ 110, 211 }, coord{ 118, 216 }, coord{ 2, 226 }, coord{ 22, 223 }, coord{ 30, 228 }, coord{ 44, 226 }, coord{ 50, 230 }, coord{ 66, 229 }, coord{ 72, 227 }, coord{ 80, 226 }, coord{ 98, 224 }, coord{ 110, 224 }, coord{ 114, 224 }, coord{ 10, 236 }, coord{ 20, 235 }, coord{ 26, 240 }, coord{ 38, 238 }, coord{ 48, 234 }, coord{ 66, 240 }, coord{ 74, 239 }, coord{ 86, 240 }, coord{ 98, 241 }, coord{ 104, 239 }, coord{ 120, 234 }, coord{ 8, 244 }, coord{ 20, 244 }, coord{ 28, 251 }, coord{ 38, 244 }, coord{ 54, 244 }, coord{ 60, 245 }, coord{ 70, 247 }, coord{ 84, 248 }, coord{ 92, 250 }, coord{ 108, 251 }, coord{ 120, 252 }, coord{ 97, 198 }, coord{ 104, 198 }, coord{ 106, 198 }, coord{ 107, 198 }, coord{ 96, 198 }, coord{ 98, 198 }, coord{ 99, 198 }, coord{ 100, 198 }, coord{ 101, 198 }, coord{ 102, 198 }, coord{ 103, 198 }, coord{ 105, 198 }, coord{ 124, 193 }, coord{ 125, 193 }, coord{ 126, 193 }, coord{ 127, 193 }, coord{ 120, 193 }, coord{ 121, 193 }, coord{ 122, 193 }, coord{ 123, 193 }, coord{ 117, 193 }, coord{ 12, 225 }, coord{ 113, 193 }, coord{ 119, 193 }, coord{ 112, 193 }, coord{ 118, 193 }, coord{ 114, 193 }, coord{ 116, 193 }, coord{ 115, 193 }, coord{ 116, 197 }, coord{ 117, 197 }, coord{ 120, 196 }, coord{ 121, 196 }, coord{ 124, 196 }, coord{ 125, 196 }, coord{ 126, 196 }, coord{ 127, 196 }, coord{ 112, 197 }, coord{ 113, 197 }, coord{ 118, 197 }, coord{ 119, 197 }, coord{ 120, 197 }, coord{ 121, 197 }, coord{ 197, 124 } };
+coord object_analysis[165] = { coord{ 4, 7 }, coord{ 15, 8 }, coord{ 24, 8 }, coord{ 39, 6 }, coord{ 55, 2 }, coord{ 57, 2 }, coord{ 72, 8 }, coord{ 84, 3 }, coord{ 90, 9 }, coord{ 103, 5 }, coord{ 121, 2 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 28, 14 }, coord{ 44, 16 }, coord{ 54, 21 }, coord{ 58, 22 }, coord{ 72, 13 }, coord{ 82, 13 }, coord{ 98, 18 }, coord{ 103, 17 }, coord{ 117, 18 }, coord{ 4, 28 }, coord{ 18, 24 }, coord{ 31, 31 }, coord{ 35, 28 }, coord{ 55, 31 }, coord{ 61, 26 }, coord{ 73, 32 }, coord{ 87, 33 }, coord{ 94, 30 }, coord{ 108, 24 }, coord{ 112, 31 }, coord{ 7, 40 }, coord{ 14, 39 }, coord{ 31, 35 }, coord{ 35, 35 }, coord{ 49, 44 }, coord{ 61, 36 }, coord{ 77, 35 }, coord{ 83, 35 }, coord{ 95, 38 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 15, 49 }, coord{ 25, 55 }, coord{ 44, 48 }, coord{ 47, 49 }, coord{ 61, 55 }, coord{ 77, 49 }, coord{ 81, 48 }, coord{ 90, 48 }, coord{ 104, 55 }, coord{ 114, 46 }, coord{ 10, 61 }, coord{ 16, 57 }, coord{ 31, 59 }, coord{ 41, 64 }, coord{ 47, 64 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 85, 63 }, coord{ 95, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 7, 74 }, coord{ 21, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 62, 69 }, coord{ 72, 68 }, coord{ 83, 74 }, coord{ 94, 77 }, coord{ 103, 77 }, coord{ 118, 77 }, coord{ 2, 85 }, coord{ 20, 85 }, coord{ 29, 81 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 79 }, coord{ 77, 87 }, coord{ 88, 83 }, coord{ 97, 84 }, coord{ 105, 79 }, coord{ 113, 88 }, coord{ 7, 94 }, coord{ 18, 98 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 98 }, coord{ 71, 99 }, coord{ 80, 98 }, coord{ 97, 97 }, coord{ 108, 99 }, coord{ 113, 95 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 101 }, coord{ 35, 102 }, coord{ 51, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 95, 101 }, coord{ 108, 101 }, coord{ 112, 104 }, coord{ 11, 116 }, coord{ 13, 118 }, coord{ 27, 120 }, coord{ 37, 121 }, coord{ 52, 113 }, coord{ 59, 121 }, coord{ 77, 115 }, coord{ 85, 112 }, coord{ 93, 112 }, coord{ 104, 112 }, coord{ 115, 112 }, coord{ 127, 127 }, coord{ 127, 126 }, coord{ 16, 45 }, coord{ 18, 44 }, coord{ 118, 85 }, coord{ 18, 42 }, coord{ 20, 45 }, coord{ 36, 45 }, coord{ 124, 80 }, coord{ 119, 84 }, coord{ 124, 84 }, coord{ 119, 85 }, coord{ 119, 86 }, coord{ 120, 86 }, coord{ 119, 89 }, coord{ 8, 33 }, coord{ 18, 43 }, coord{ 19, 43 }, coord{ 17, 44 }, coord{ 19, 44 }, coord{ 20, 44 }, coord{ 37, 44 }, coord{ 9, 45 }, coord{ 21, 45 }, coord{ 26, 45 }, coord{ 27, 45 }, coord{ 28, 45 }, coord{ 29, 45 }, coord{ 30, 45 }, coord{ 31, 45 }, coord{ 32, 45 }, coord{ 33, 45 }, coord{ 34, 45 }, coord{ 35, 45 }, coord{ 38, 45 }, coord{ 120, 89 }, coord{ 121, 89 }, coord{ 106, 90 }, coord{ 99, 93 }, coord{ 100, 93 }, coord{ 68, 110 }, coord{ 61, 117 }, coord{ 77, 117 }, coord{ 93, 5 } };
 
 
 uint64 Hash_Algorithm_1(const cv::Mat& img)
@@ -217,18 +220,18 @@ uint64 FNV_Hash(const cv::Mat& img, std::deque<coord> coords, bool use_RGB = tru
 }
 
 
-void Copy_Unique_Left_Half(filesystem::path debug, filesystem::path dest)
+void Copy_Unique_Left_Half(fs::path debug, fs::path dest)
 {
 	std::unordered_set<std::string> md5s;
 
 	try {
-		filesystem::directory_iterator iter_end;
-		for (filesystem::directory_iterator debug_outer_dir(debug); debug_outer_dir != iter_end; debug_outer_dir++) {
+		fs::directory_iterator iter_end;
+		for (fs::directory_iterator debug_outer_dir(debug); debug_outer_dir != iter_end; debug_outer_dir++) {
 			// [FFVIII]\tonberry\debug\*
 			std::string dirname = debug_outer_dir->path().filename().string();
 			// skip files and directories that end in 0
-			if (!filesystem::is_directory(debug_outer_dir->path()) || dirname.substr(dirname.length() - 1, 1) == "0") continue;
-			for (filesystem::directory_iterator texture(debug_outer_dir->path()); texture != iter_end; texture++) {
+			if (!fs::is_directory(debug_outer_dir->path()) || dirname.substr(dirname.length() - 1, 1) == "0") continue;
+			for (fs::directory_iterator texture(debug_outer_dir->path()); texture != iter_end; texture++) {
 				// [FFVIII]\tonberry\debug\debug_outer_dir\*
 				std::string tex_name = texture->path().string();
 				cv::Mat img = cv::imread(tex_name, CV_LOAD_IMAGE_COLOR);
@@ -264,18 +267,18 @@ void Copy_Unique_Left_Half(filesystem::path debug, filesystem::path dest)
 			}
 		}
 	}
-	catch (filesystem::filesystem_error e) {
+	catch (fs::filesystem_error e) {
 		std::cout << e.what() << std::endl;
 	}
 }
 
-void Copy_Unique_Left_Objects(filesystem::path analysis, filesystem::path dest)
+void Copy_Unique_Left_Objects(fs::path analysis, fs::path dest)
 {
 	std::unordered_set<std::string> md5s;
 
 	try {
-		filesystem::directory_iterator iter_end;
-		for (filesystem::directory_iterator texture(analysis); texture != iter_end; texture++) {
+		fs::directory_iterator iter_end;
+		for (fs::directory_iterator texture(analysis); texture != iter_end; texture++) {
 			// [FFVIII]\tonberry\debug\analysis\*.bmp
 			std::string tex_name = texture->path().string();
 			cv::Mat img = cv::imread(tex_name, CV_LOAD_IMAGE_COLOR);
@@ -339,7 +342,7 @@ void Copy_Unique_Left_Objects(filesystem::path analysis, filesystem::path dest)
 			}
 		}
 	}
-	catch (filesystem::filesystem_error e) {
+	catch (fs::filesystem_error e) {
 		std::cout << e.what() << std::endl;
 	}
 }
@@ -349,7 +352,7 @@ const int DIM_Y = 128;
 typedef long long_dim[DIM_X];
 typedef double double_dim[DIM_X];
 
-void Analyze_Pixels(filesystem::path analysis, filesystem::path dest)
+void Analyze_Pixels(fs::path analysis, fs::path dest)
 {
 	long_dim* sum = new long_dim[DIM_Y];
 	double_dim* mean = new double_dim[DIM_Y];
@@ -357,6 +360,7 @@ void Analyze_Pixels(filesystem::path analysis, filesystem::path dest)
 	std::deque<uchar> pixvals[DIM_Y][DIM_X];
 
 	std::deque<cv::Mat> images;
+	std::deque<std::string> image_names;
 
 	//init to 0
 	for (int y = 0; y < DIM_Y; y++) {
@@ -366,8 +370,8 @@ void Analyze_Pixels(filesystem::path analysis, filesystem::path dest)
 	}
 
 	try {
-		filesystem::directory_iterator iter_end;
-		for (filesystem::directory_iterator texture(analysis); texture != iter_end; texture++) {
+		fs::directory_iterator iter_end;
+		for (fs::directory_iterator texture(analysis); texture != iter_end; texture++) {
 			// [FFVIII]\tonberry\debug\analysis\*
 			std::string tex_name = texture->path().string();
 			cv::Mat img = cv::imread(tex_name, CV_LOAD_IMAGE_COLOR);
@@ -386,9 +390,10 @@ void Analyze_Pixels(filesystem::path analysis, filesystem::path dest)
 			}
 
 			images.push_back(img);
+			image_names.push_back(texture->path().stem().string());
 		}
 	}
-	catch (filesystem::filesystem_error e) {
+	catch (fs::filesystem_error e) {
 		std::cout << e.what() << std::endl;
 	}
 	
@@ -555,9 +560,18 @@ void Analyze_Pixels(filesystem::path analysis, filesystem::path dest)
 	avg_time = ((double)total_time) / images.size();
 
 	// count collisions
+	std::ofstream collout;
+	collout.open((dest.parent_path() / "analysis_collisions.csv").string());
 	collisions = 0;
 	for (std::pair<uint64, std::set<int>> hashset : hashmap) {
 		collisions += hashset.second.size() - 1;
+		// write collisions to collout
+		if (hashset.second.size() > 1) {
+			collout << hashset.first;
+			for (int image_index : hashset.second)
+				collout << "," << image_names[image_index];
+			collout << std::endl;
+		}
 	}
 
 	std::cout << images.size() << " images; " << collisions << " collisions; ~" << avg_time << " ms per image" << std::endl;
@@ -609,30 +623,58 @@ std::string md5_Hash(const cv::Mat& img, coord* coords = nullptr, int len = 64)
 	return md5.hexdigest();
 }
 
+void Create_Hashmap(fs::path texture_dir, fs::path output_dir, bool append = false)
+{
+	fs::path hashmap_csv(output_dir / (texture_dir.filename().string() + "_hm.csv"));
+	//fs::path collisions_dir(output_dir / (texture_dir.filename().string() + "_coll.csv"));
+
+	std::ofstream out;
+	unsigned int open_mode = std::ofstream::out;
+	if (append) open_mode |= std::ofstream::app;
+	out.open(hashmap_csv.string(), open_mode);
+	
+	fs::directory_iterator end;
+	for (fs::directory_iterator iter(texture_dir); iter != end; iter++) {
+		fs::path path = iter->path();
+		if (fs::is_directory(path)) {
+			// recursive
+			Create_Hashmap(path, output_dir, true);
+		} else if (fs::is_regular_file(path) && boost::iequals(path.extension().string(), ".bmp")) {
+			cv::Mat img = cv::imread(path.string(), CV_LOAD_IMAGE_COLOR);
+			uint64 hash_top = FNV_Hash(img, object_analysis, 165, true);
+			uint64 hash_bottom = FNV_Hash(img(cv::Rect(0,128,128,128)), object_analysis, 165, true);
+			out << path.stem() << "," << hash_top << "," << hash_bottom << std::endl;
+		}
+	}
+}
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-	filesystem::path debug(FF8_ROOT + "\\tonberry\\debug");
-	filesystem::path analysis(debug / "analysis0");
-	filesystem::path textures = (FF8_ROOT + "\\textures");
+	fs::path debug(FF8_ROOT + "tonberry\\debug");
+	fs::path analysis(debug / "analysis0");
+	fs::path textures = (FF8_ROOT + "\\textures");
 
 	//Copy_Unique_Left_Half(debug, debug / "analysis0");
 	//Copy_Unique_Left_Objects(analysis, analysis / "objects");
 	//return 0;
 
-	Analyze_Pixels(analysis / "objects", debug / "object_analysis.csv");
+	//Analyze_Pixels(analysis / "objects", debug / "object_analysis.csv");
+	//return 0;
+
+	fs::path ocean2(FF8_ROOT + "tonberry\\MCINDUS_Ocean2");
+	Create_Hashmap(ocean2 / "original bitmaps", ocean2);
 	return 0;
 	
 	std::deque<cv::Mat> images;
 	std::deque<std::string> image_names;
 	try {
-		filesystem::directory_iterator iter_end;
-		for (filesystem::directory_iterator debug_outer_dir(debug); debug_outer_dir != iter_end; debug_outer_dir++) {
+		fs::directory_iterator iter_end;
+		for (fs::directory_iterator debug_outer_dir(debug); debug_outer_dir != iter_end; debug_outer_dir++) {
 			// [FFVIII]\tonberry\debug\*
 			std::string dirname = debug_outer_dir->path().filename().string();
 			// skip files and directories that end in 0
-			if (!filesystem::is_directory(debug_outer_dir->path()) || dirname.substr(dirname.length() -1, 1) == "0") continue;
-			for (filesystem::directory_iterator texture(debug_outer_dir->path()); texture != iter_end; texture++) {
+			if (!fs::is_directory(debug_outer_dir->path()) || dirname.substr(dirname.length() -1, 1) == "0") continue;
+			for (fs::directory_iterator texture(debug_outer_dir->path()); texture != iter_end; texture++) {
 				// [FFVIII]\tonberry\debug_outer_dir\*
 				std::string tex_name = texture->path().string();
 				//std::cout << tex_name << std::endl;
@@ -646,7 +688,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			}
 		}
 	}
-	catch (filesystem::filesystem_error e) {
+	catch (fs::filesystem_error e) {
 		std::cout << e.what() << std::endl;
 	}
 
@@ -801,14 +843,14 @@ int _tmain(int argc, _TCHAR* argv[])
 	//std::cout << hash_zel_13 << std::endl;
 
 	//try {
-	//	filesystem::directory_iterator iter_end;
-	//	for (filesystem::directory_iterator tex_outer_dir(textures); tex_outer_dir != iter_end; tex_outer_dir++) {
+	//	fs::directory_iterator iter_end;
+	//	for (fs::directory_iterator tex_outer_dir(textures); tex_outer_dir != iter_end; tex_outer_dir++) {
 	//		// [FFVIII]\textures\*
-	//		if (!filesystem::is_directory(tex_outer_dir->path())) continue;
-	//		for (filesystem::directory_iterator tex_inner_dir(tex_outer_dir->path()); tex_inner_dir != iter_end; tex_inner_dir++) {
+	//		if (!fs::is_directory(tex_outer_dir->path())) continue;
+	//		for (fs::directory_iterator tex_inner_dir(tex_outer_dir->path()); tex_inner_dir != iter_end; tex_inner_dir++) {
 	//			// [FFVIII]\textures\tex_inner_dir\*
-	//			if (!filesystem::is_directory(tex_inner_dir->path())) continue;
-	//			for (filesystem::directory_iterator files(tex_inner_dir->path()); files != iter_end; files++) {
+	//			if (!fs::is_directory(tex_inner_dir->path())) continue;
+	//			for (fs::directory_iterator files(tex_inner_dir->path()); files != iter_end; files++) {
 	//				// [FFVIII]\textures\tex_outer_dir\tex_inner_dir\*.bmp
 	//				std::string pathstring = files->path().string();
 	//				std::cout << pathstring << std::endl;
@@ -816,7 +858,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	//		}
 	//	}
 	//}
-	//catch (filesystem::filesystem_error e) {
+	//catch (fs::fs_error e) {
 	//	std::cout << e.what() << std::endl;
 	//}
 	return 0;
