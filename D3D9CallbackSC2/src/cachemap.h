@@ -1,7 +1,7 @@
 #ifndef _CACHEMAP_H
 #define _CACHEMAP_H
 
-#include "Main.h""
+#include <Main.h>
 #include <stdint.h>
 #include <unordered_map>
 
@@ -38,18 +38,35 @@ private:
 
 class TextureCache{
 public:
-	typedef pair<uint64_t, HANDLE> lru_item_t;                     //I'm guessing this maps the hash to the replacing handle
-	typedef list<lru_item_t> lru_list_t;
-	typedef lru_list_t::iterator lru_list_iter;
-	typedef unordered_map<uint64_t, lru_list_iter> lru_map_t;        // unordered for fast access
-	typedef lru_map_t::iterator lru_map_iter;
-	typedef unordered_map<HANDLE, lru_map_iter> handlecache_t;      // unordered for fast access
-	typedef handlecache_t::iterator handlecache_iter;
+	typedef pair<uint64_t, HANDLE>					lru_item_t;                     //I'm guessing this maps the hash to the replacing handle
+	typedef list<lru_item_t>						lru_list_t;
+	typedef lru_list_t::iterator					lru_list_iter;
+	typedef unordered_map<uint64_t, lru_list_iter>	lru_map_t;        // unordered for fast access
+	typedef lru_map_t::iterator						lru_map_iter;
+	typedef unordered_map<HANDLE, lru_map_iter>		handlecache_t;      // unordered for fast access
+	typedef handlecache_t::iterator					handlecache_iter;
+
+
+	typedef struct nhcache_map_iter_hasher
+	{
+		size_t operator()(lru_map_iter iter) const{
+			return iter->first;                                                 // use nhcache entry hash to index reverse_handlecache
+		}
+	};
+
+	typedef unordered_map<lru_map_iter, HANDLE, nhcache_map_iter_hasher>	reverse_handlecache_t; // reverse indexing of handlecache; needed for when values in handlecache are removed from the nhcache
+	typedef reverse_handlecache_t::iterator									reverse_handlecache_iter;
+
 
 	TextureCache(unsigned);
+
 	//inline: faster when compiled
 	inline void eraseHandle(HANDLE h){
-		handlecache_.erase(h);
+        handlecache_iter iter;
+		if (!handlecache_.empty() && ((iter = handlecache_.find(h)) != handlecache_.end())){
+			reverse_handlecache_.erase(iter->second);
+			handlecache_.erase(h);
+		}
 	}
 
 	/*update: move mru to the front of the list,
@@ -59,32 +76,36 @@ public:
 				HANDLE		replaced	//original game's handle
 	);	
 
+	bool TextureCache::find(uint64_t hash, HANDLE replaced);
+
 	/*inserts new hash->replacement mapping and a replaced handle entry.
 	  PRECONDITION:	you have to assure that "hash" is not on chache yet:
 	  check "bool update(hash, replaced)".
 	*/
 	void insert(uint64_t	hash,		//texture's hash
 				HANDLE		replaced,	//original game's handle
-				HANDLE		replacement	//modded texture's handle
-				);
+				HANDLE		replacement,	//modded texture's handle
+				unordered_map<uint64_t,string> * hashmap
+	);
 
 	/*sets the texture replacement for "replaced" if exists.
 	  returns:			true if exists a valid handle replacement for the surfacehandle.
 						false if it doesn't exists or it's invalid.
 	*/
 	bool setTexture(HANDLE				replaced,	//original game's handle
-					IDirect3DTexture9**	newtexture	//pointer to the replacement texture
-		);
+					IDirect3DTexture9**	newtexture,unordered_map<uint64_t,string> * hashmap	//pointer to the replacement texture
+	);
 
-private:
+
 	// TOGETHER these make nhcache:
-	lru_list_t		nh_list_;        // newhandle list stores pair of hash and newhandle
-	lru_map_t		nh_map_;          // newhandle map:        hash  :-->  h_list pointe
+	lru_list_t				nh_list_;        // newhandle list stores pair of hash and newhandle
+	lru_map_t				nh_map_;          // newhandle map:        hash  :-->  nh_list pointer
 
 	// handlecache:
-	handlecache_t	handlecache_;  // handle cache:        replaced HANDLE  :-->  pointer to nhcache entry
-	unsigned		cache_size_;
-	unsigned		entries_;
+	handlecache_t			handlecache_;  // handle cache:        replaced HANDLE  :-->  pointer to nhcache entry
+	reverse_handlecache_t	reverse_handlecache_;
+	unsigned				cache_size_;
+	unsigned				entries_;
 };
 
 #endif
