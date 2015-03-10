@@ -884,6 +884,175 @@ void Get_Blank_Hashes()
 	std::cout << "  combined_rgb: " << combined_rgb << std::endl << std::endl;
 }
 
+void Test_Texture_Replacement()
+{
+	cv::Mat sel_13 = cv::imread("H:\\Game Saves\\Final Fantasy VIII\\Mods\\Berrymapper - Hash Textures\\BerryMapper\\INPUT\\sel_13.bmp", CV_LOAD_IMAGE_COLOR);
+	cv::Mat wm_ocean = cv::imread("C:\\Program Files (x86)\\Steam\\steamapps\\common\\FINAL FANTASY VIII\\tonberry\\MCINDUS_Ocean2\\wm\\wm_oceancstlt\\wm_oceancstlt_13.png", CV_LOAD_IMAGE_COLOR);
+	cv::Mat wm_ocean_upper = wm_ocean.rowRange(0, wm_ocean.rows / 2);
+	cv::Mat wm_ocean_lower = wm_ocean.rowRange(wm_ocean.rows / 2, wm_ocean.rows);
+
+	cv::Mat test(1024, 1024, CV_8UC3);
+	// UPSCALE ORIGINAL TEXTURE
+	for (int y = 0; y < 1024; y++) {
+		for (int x = 0; x < 1024; x++) {
+			cv::Vec3b pixel = sel_13.at<cv::Vec3b>(y / 4, x / 4);
+			test.data[test.step[0] * y + test.step[1] * x + 0] = pixel[0];
+			test.data[test.step[0] * y + test.step[1] * x + 1] = pixel[1];
+			test.data[test.step[0] * y + test.step[1] * x + 2] = pixel[2];
+		}
+	}
+
+	//cv::namedWindow("image", cv::WINDOW_AUTOSIZE);
+	//cv::imshow("image", test);
+	//cv::waitKey(0);
+	cv::imwrite("img_testing\\upscaled.bmp", test);
+
+	// UPSCALE ORIGINAL FLIPPED
+	for (int y = 0; y < 1024; y++) {
+		for (int x = 0; x < 1024; x++) {
+			cv::Vec3b pixel = sel_13.at<cv::Vec3b>(sel_13.rows - 1 - y / 4, x / 4);
+			test.data[test.step[0] * y + test.step[1] * x + 0] = pixel[0];
+			test.data[test.step[0] * y + test.step[1] * x + 1] = pixel[1];
+			test.data[test.step[0] * y + test.step[1] * x + 2] = pixel[2];
+		}
+	}
+
+	//cv::namedWindow("image", cv::WINDOW_AUTOSIZE);
+	//cv::imshow("image", test);
+	//cv::waitKey(0);
+	cv::imwrite("img_testing\\upscaled_flipped.bmp", test);
+
+	// UPSCALE OCEAN UPPER
+	for (int y = 0; y < 1024; y++) {
+		for (int x = 0; x < 1024; x++) {
+			cv::Vec3b pixel;
+			if (y < 512)
+				pixel = wm_ocean.at<cv::Vec3b>(y, x);
+			else
+				pixel = sel_13.at<cv::Vec3b>(y / 4, x / 4);
+			test.data[test.step[0] * y + test.step[1] * x + 0] = pixel[0];
+			test.data[test.step[0] * y + test.step[1] * x + 1] = pixel[1];
+			test.data[test.step[0] * y + test.step[1] * x + 2] = pixel[2];
+		}
+	}
+
+	//cv::namedWindow("image", cv::WINDOW_AUTOSIZE);
+	//cv::imshow("image", test);
+	//cv::waitKey(0);
+	cv::imwrite("img_testing\\upper.bmp", test);
+
+	// UPSCALE OCEAN UPPER FLIPPED
+	cv::Mat* to_use;
+	to_use = &wm_ocean;
+	for (int y = 0; y < 1024; y++) {
+		for (int x = 0; x < 1024; x++) {
+			cv::Vec3b pixel;
+			if (y < 512)
+				pixel = sel_13.at<cv::Vec3b>(sel_13.rows - 1 - y / 4, x / 4);
+			else {
+				int repl_y = to_use->rows - 1 - y;
+				if (repl_y < 0) repl_y += 512;
+				pixel = to_use->at<cv::Vec3b>(repl_y, x);
+			}
+			test.data[test.step[0] * y + test.step[1] * x + 0] = pixel[0];
+			test.data[test.step[0] * y + test.step[1] * x + 1] = pixel[1];
+			test.data[test.step[0] * y + test.step[1] * x + 2] = pixel[2];
+		}
+	}
+
+	cv::namedWindow("image", cv::WINDOW_AUTOSIZE);
+	cv::imshow("image", test);
+	cv::waitKey(0);
+	cv::imwrite("img_testing\\full_upper_flipped.bmp", test);
+
+	// UPSCALE OCEAN_UPPER FLIPPED
+	to_use = &wm_ocean_upper;
+	for (int y = 0; y < 1024; y++) {
+		for (int x = 0; x < 1024; x++) {
+			cv::Vec3b pixel;
+			if (y < 512)
+				pixel = sel_13.at<cv::Vec3b>(sel_13.rows - 1 - y / 4, x / 4);
+			else {
+				int repl_y = to_use->rows - 1 - y;
+				if (repl_y < 0) repl_y += 512;
+				pixel = to_use->at<cv::Vec3b>(repl_y, x);
+			}
+			test.data[test.step[0] * y + test.step[1] * x + 0] = pixel[0];
+			test.data[test.step[0] * y + test.step[1] * x + 1] = pixel[1];
+			test.data[test.step[0] * y + test.step[1] * x + 2] = pixel[2];
+		}
+	}
+
+	cv::namedWindow("image", cv::WINDOW_AUTOSIZE);
+	cv::imshow("image", test);
+	cv::waitKey(0);
+	cv::imwrite("img_testing\\half_upper_flipped.bmp", test);
+
+	// UPSCALE OCEAN LOWER
+	for (int y = 0; y < 1024; y++) {
+		for (int x = 0; x < 1024; x++) {
+			cv::Vec3b pixel;
+			if (y < 512)
+				pixel = sel_13.at<cv::Vec3b>(y / 4, x / 4);
+			else
+				pixel = wm_ocean.at<cv::Vec3b>(y, x);
+			test.data[test.step[0] * y + test.step[1] * x + 0] = pixel[0];
+			test.data[test.step[0] * y + test.step[1] * x + 1] = pixel[1];
+			test.data[test.step[0] * y + test.step[1] * x + 2] = pixel[2];
+		}
+	}
+
+	cv::namedWindow("image", cv::WINDOW_AUTOSIZE);
+	cv::imshow("image", test);
+	cv::waitKey(0);
+	cv::imwrite("img_testing\\lower.bmp", test);
+
+	// UPSCALE OCEAN LOWER FLIPPED
+	to_use = &wm_ocean;
+	for (int y = 0; y < 1024; y++) {
+		for (int x = 0; x < 1024; x++) {
+			cv::Vec3b pixel;
+			if (y < 512) {
+				int repl_y = to_use->rows - 1 - y;
+				//if (repl_y < 0) repl_y += 512;
+				pixel = to_use->at<cv::Vec3b>(repl_y, x);
+			}
+			else
+				pixel = sel_13.at<cv::Vec3b>(sel_13.rows - 1 - y / 4, x / 4);
+			test.data[test.step[0] * y + test.step[1] * x + 0] = pixel[0];
+			test.data[test.step[0] * y + test.step[1] * x + 1] = pixel[1];
+			test.data[test.step[0] * y + test.step[1] * x + 2] = pixel[2];
+		}
+	}
+
+	cv::namedWindow("image", cv::WINDOW_AUTOSIZE);
+	cv::imshow("image", test);
+	cv::waitKey(0);
+	cv::imwrite("img_testing\\full_lower_flipped.bmp", test);
+
+	// UPSCALE OCEAN_LOWER FLIPPED
+	to_use = &wm_ocean_lower;
+	for (int y = 0; y < 1024; y++) {
+		for (int x = 0; x < 1024; x++) {
+			cv::Vec3b pixel;
+			if (y < 512) {
+				int repl_y = to_use->rows - 1 - y;
+				//if (repl_y < 0) repl_y += 512;
+				pixel = to_use->at<cv::Vec3b>(repl_y, x);
+			} else
+				pixel = sel_13.at<cv::Vec3b>(sel_13.rows - 1 - y / 4, x / 4);
+			test.data[test.step[0] * y + test.step[1] * x + 0] = pixel[0];
+			test.data[test.step[0] * y + test.step[1] * x + 1] = pixel[1];
+			test.data[test.step[0] * y + test.step[1] * x + 2] = pixel[2];
+		}
+	}
+
+	cv::namedWindow("image", cv::WINDOW_AUTOSIZE);
+	cv::imshow("image", test);
+	cv::waitKey(0);
+	cv::imwrite("img_testing\\half_lower_flipped.bmp", test);
+}
+
 int _tmain(int argc, _TCHAR* argv[])
 {
 	fs::path debug(FF8_ROOT + "tonberry\\debug");
@@ -894,14 +1063,17 @@ int _tmain(int argc, _TCHAR* argv[])
 	//Copy_Unique_Left_Objects(analysis, analysis / "objects");
 	//return 0;
 
-	//Get_Blank_Hashes();
-	//return 0;
-
 	//Analyze_Pixels(analysis / "objects", debug / "object_analysis.csv");
 	//return 0;
 
 	fs::path ocean2(FF8_ROOT + "tonberry\\MCINDUS_Ocean2");
 	Create_Hashmap(ocean2 / "original bitmaps", ocean2);
+	return 0;
+
+	//Get_Blank_Hashes();
+	//return 0;
+
+	Test_Texture_Replacement();
 	return 0;
 	
 	std::deque<cv::Mat> images;

@@ -1,9 +1,7 @@
 #include "Main.h"
-//#include "cachemap.h"
+#include "cachemap.h"
 #include <stdint.h>
 #include <sstream>
-#include <unordered_set>
-#include <unordered_map>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 namespace fs = boost::filesystem;
@@ -12,7 +10,6 @@ namespace fs = boost::filesystem;
 bool g_ReportingEvents = false;
 #endif
 
-typedef unsigned long long uint64;
 typedef unsigned char uchar;
 
 GlobalContext *g_Context;
@@ -48,6 +45,7 @@ fs::path HASHMAP_DIR(TONBERRY_DIR / "hashmap");
 fs::path PREFS_TXT(TONBERRY_DIR / "prefs.txt");
 fs::path ERROR_LOG(TONBERRY_DIR / "error.log");
 fs::path DEBUG_LOG(DEBUG_DIR / "debug.log");
+fs::path NOMATCH_LOG(DEBUG_DIR / "nomatch.log");
 fs::path COLLISIONS_CSV(TONBERRY_DIR / "collisions.csv");
 fs::path HASHMAP2_CSV(TONBERRY_DIR / "hash2map.csv");
 fs::path OBJECTS_CSV(TONBERRY_DIR / "objmap.csv");
@@ -65,69 +63,14 @@ const int VRAM_DIM = 256;
 
 int texture_count = 0;													// keep track of the number of textures processed
 
-//
-// FIELD NAME SET AND HASHMAPS
-//
-typedef unordered_set<string> fieldset_t;								// holds field names
-typedef fieldset_t::const_iterator fieldset_iter;						// points to field names
-
-fieldset_t fieldset;
-
-struct fieldset_iter_hasher
-{
-	size_t operator()(fieldset_iter iter) const {						// since fieldset entries are unique, use field to hash fieldset_iter
-		return std::hash<string>()(*iter);
-	}
-};
-
-struct fieldset_iter_compare
-{
-	bool operator()(const fieldset_iter& lhs, const fieldset_iter& rhs)
-	{
-		return *lhs == *rhs;											// since fieldset entries are unique, use fields to compare fieldset_iters
-	}
-};
-
-typedef unordered_set<fieldset_iter, fieldset_iter_hasher> fieldset_iter_set_t;	// holds sets of fieldset_iter
-typedef fieldset_iter_set_t::iterator fieldset_iter_set_iter;					// iterates sets of fieldset_iter
-
-typedef unordered_map<uint64, fieldset_iter_set_t> fieldmap_t;			// maps hashes to a set of matching field names; unordered for O(1) access/insertion, set for collisions
-typedef fieldmap_t::iterator fieldmap_iter;
-
-fieldmap_t fieldmap;													// maps original texture hash to replacement texture name
-
-//
-// HANDLE CACHES
-//
-typedef pair<uint64, HANDLE>						nhcache_item_t;			// associates hashes with newhandles
-typedef list<nhcache_item_t>						nhcache_list_t;			// holds hashes and their associated newhandle in least-recently-accessed order
-typedef nhcache_list_t::iterator					nhcache_list_iter;
-typedef unordered_map<uint64, nhcache_list_iter>	nhcache_map_t;			// maps hashes to an entry in the newhandle list
-typedef nhcache_map_t::iterator						nhcache_map_iter;
-typedef unordered_map<HANDLE, nhcache_map_iter>		handlecache_t;			// maps handles to an entry in the nhcache map
-typedef handlecache_t::iterator						handlecache_iter;
-
-typedef struct nhcache_map_iter_hasher
-{
-	size_t operator()(nhcache_map_iter iter) const{
-		return iter->first;													// use nhcache entry hash to index reverse_handlecache
-	}
-};
-
-typedef unordered_map<nhcache_map_iter, HANDLE, nhcache_map_iter_hasher> reverse_handlecache_t;	// reverse indexing of handlecache; needed for when values in handlecache are removed from the nhcache
-typedef reverse_handlecache_t::iterator				reverse_handlecache_iter;
-
-// together these make nhcache:
-nhcache_list_t nh_list;
-nhcache_map_t nh_map;
-
-// handlecache:
-handlecache_t handlecache;
-reverse_handlecache_t reverse_handlecache;
+TextureCache* cache;
+FieldMap* fieldmap;
+unordered_set<uint64> nomatch_set;
 
 //
 // FNV HASH CONSTANTS
 //
+
 const uint64 FNV_HASH_LEN		= 64;						// length of FNV hash in bits
 const uint64 FNV_MODULO			= 1 << FNV_HASH_LEN;		// implicit: since uint64 is 64-bits, overflow is equivalent to modulo
 const uint64 FNV_OFFSET_BASIS	= 14695981039346656037;		// starting value of FNV hash
@@ -153,13 +96,10 @@ uint64 FNV_NOUPPER_RGB_BASIS	= FNV_OFFSET_BASIS * FNV_NOLOWER_RGB_FACTOR;			// s
 //
 // USER PREFERENCES
 //
+
 float RESIZE_FACTOR = 4.0;		// texture upscale factor
 bool DEBUG = false;				// write debug information
 unsigned CACHE_SIZE = 100;		// cache size in megabytes
-
-//TextureCache
-//unsigned cache_size = 1000;
-//TextureCache texcache(cache_size);
 
 
 void GraphicsInfo::Init()
@@ -251,17 +191,16 @@ void load_fieldmaps()
 
 						// field names are stored only once
 						string field = items[0];
-						fieldset_iter ptr_to_field_name = fieldset.insert(field).first;
 
 						uint64 hash_combined = ToNumber<uint64>(items[1]);
-						fieldmap[hash_combined].insert(ptr_to_field_name);
+						fieldmap->insert(hash_combined, field);
 
 						if (items.size() > 2) {
 							uint64 hash_upper = ToNumber<uint64>(items[2]);
-							fieldmap[hash_upper].insert(ptr_to_field_name);
+							fieldmap->insert(hash_upper, field);
 
 							uint64 hash_lower = ToNumber<uint64>(items[3]);
-							fieldmap[hash_lower].insert(ptr_to_field_name);
+							fieldmap->insert(hash_lower, field);
 						}
 					}
 					hashfile.close();
@@ -278,10 +217,15 @@ void load_fieldmaps()
 
 void GlobalContext::Init()
 {
-	ofstream debug;
-	debug.open("tonberry\\debug\\debug.log", ofstream::out);
+	cache = new TextureCache(CACHE_SIZE);
+	fieldmap = new FieldMap();
+	
+	ofstream debug(DEBUG_LOG.string(), ofstream::out | ofstream::trunc);
 	std::time_t time = std::time(nullptr);
-	debug << "Initialized " << std::asctime(std::localtime(&time));
+	debug << "Initialized " << asctime(localtime(&time)) << endl << endl;
+
+	ofstream nomatch(NOMATCH_LOG.string(), ofstream::out | ofstream::trunc);
+	nomatch << "Initialized " << asctime(localtime(&time)) << endl << endl;
 
 	Graphics.Init();
 	load_prefs();
@@ -290,16 +234,9 @@ void GlobalContext::Init()
 	debug << "hashmap loaded." << endl;
 
 	debug << "fieldmap:" << endl;
-	fieldmap_iter map_iter;
-	for (map_iter = fieldmap.begin(); map_iter != fieldmap.end(); map_iter++) {
-		debug << map_iter->first << ":";
-		fieldset_iter_set_iter field_iter;
-		for (field_iter = map_iter->second.begin(); field_iter != map_iter->second.end(); field_iter++) {
-			debug << " " << **field_iter << ";";
-		}
-		debug << endl;
-	}
+	fieldmap->writeMap(debug);
 
+	debug << endl;
 	debug.close();
 }
 
@@ -461,47 +398,116 @@ uint64 FNV_Hash_Combined(BYTE* pData, UINT pitch, int width, int height, uint64&
 	return hash;
 }
 
-bool get_fields(const uint64& hash_combined, const uint64& hash_upper, const uint64& hash_lower, fieldset_iter& field_combined, fieldset_iter& field_upper, fieldset_iter& field_lower)
+bool get_fields(const uint64& hash_combined, const uint64& hash_upper, const uint64& hash_lower, string& field_combined, string& field_upper, string& field_lower)
 {
-	fieldmap_iter iter, iter_upper, iter_lower;
+	unordered_set<string> fields;
 	int upper_matches = 0, lower_matches = 0;
-	fieldset_iter_set_t intersection;
 
 	// search for hash_combined
-	if ((iter = fieldmap.find(hash_combined)) != fieldmap.end()) {
-		field_combined = *(iter->second.begin());							// one field matches whole texture: use this one
+	if (fieldmap->get_fields(hash_combined, fields)) {
+		field_combined = *(fields.begin());									// a field matches whole texture: use this one
 		return true;
 	}
 
-	// search for hash_upper
-	if ((iter_upper = fieldmap.find(hash_upper)) != fieldmap.end())
-		upper_matches = iter_upper->second.size();
+	// hash_upper and hash_lower should never match the first file, because hash_combined would already have matched it
+	return (fieldmap->get_first_field(hash_upper, field_upper) || fieldmap->get_first_field(hash_lower, field_lower));
+}
 
-	// if texture was large enough, search for hash_lower as well
-	if (hash_lower > 0 && ((iter_lower = fieldmap.find(hash_lower)) != fieldmap.end())) {
-			lower_matches = iter_lower->second.size();
-	}
+HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced_height, UINT replaced_pitch, const string* field_combined, const string* field_upper = NULL, const string* field_lower = NULL)
+{
+	bool use_combined, use_upper = false, use_lower = false;
+	fs::path path_combined, path_upper, path_lower;
+	ifstream ifile_combined, ifile_upper, ifile_lower;
 
-	if (upper_matches & lower_matches)										// both upper and lower have at least 1 match
-		set_intersection(iter_upper->second.begin(), iter_upper->second.end(), iter_lower->second.begin(), iter_lower->second.end(), inserter(intersection, intersection.end()), fieldset_iter_compare());
-
-	if (intersection.size() > 0) {											// both upper and lower share at least 1 match
-		field_upper = field_lower = *(intersection.begin());				// so set both upper and lower to the first one (based on hash)
-		return true;
-	}
+	use_combined = (field_combined != NULL && !field_combined->empty());
 	
-	bool match_found = false;
-	if (upper_matches) {													// upper has at least 1 match
-		field_upper = *(iter_upper->second.begin());						// so set upper to the first one (based on hash)
-		match_found = true;
+	if (use_combined) {
+		// get texture path from field name
+		path_combined = ((((TEXTURES_DIR / field_combined->substr(0, 2))) / field_combined->substr(0, field_combined->rfind("_"))) / (*field_combined + ".png"));
+
+		// load file_combined
+		ifile_combined.open(path_combined.string());
+		if (ifile_combined.fail()) return NULL;													// file could not be opened, so no texture can be created
+	} else {
+		use_upper = (field_upper != NULL && !field_upper->empty());
+		use_lower = (field_lower != NULL && !field_lower->empty());
+	
+		if (use_upper) {
+			// get texture path from field name
+			path_upper = ((((TEXTURES_DIR / field_upper->substr(0, 2))) / field_upper->substr(0, field_upper->rfind("_"))) / (*field_upper + ".png"));
+
+			// load file_upper
+			ifile_upper.open(path_upper.string());
+			if (ifile_upper.fail()) use_upper = false;											// file could not be opened, so do not use upper half
+		}
+
+		if (use_lower) {
+			// get texture path from field name
+			path_lower = ((((TEXTURES_DIR / field_lower->substr(0, 2))) / field_lower->substr(0, field_lower->rfind("_"))) / (*field_lower + ".png"));
+
+			// load file_lower
+			ifile_lower.open(path_lower.string());
+			if (ifile_lower.fail()) use_upper = false;											// file could not be opened, so do not use upper half
+		}
+
+		if (!use_upper && !use_lower) return NULL;												// neither file could be loaded, so no texture can be created
 	}
 
-	if (lower_matches) {													// lower has at least 1 match
-		field_lower = *(iter_lower->second.begin());						// so set lower to the first one (based on hash)
-		match_found = true;
+	LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
+	IDirect3DTexture9* newtexture;
+	Bitmap bmp_combined, bmp_upper, bmp_lower;
+
+	// load replacement bitmaps
+	if (use_combined)
+		bmp_combined.LoadPNG(String(path_combined.string().c_str()));
+	else {
+		if (use_upper)
+			bmp_upper.LoadPNG(String(path_upper.string().c_str()));
+		if (use_lower)
+			bmp_lower.LoadPNG(String(path_lower.string().c_str()));
 	}
 
-	return match_found;
+	// initialize newtexture
+	int replacement_width	= int(RESIZE_FACTOR * (float)replaced_width);
+	int replacement_height	= int(RESIZE_FACTOR * (float)replaced_height);
+	Device->CreateTexture(replacement_width, replacement_height, 0, D3DUSAGE_AUTOGENMIPMAP, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newtexture, NULL);
+
+	// load image data into newtexture
+	D3DLOCKED_RECT newRect;
+	newtexture->LockRect(0, &newRect, NULL, 0);
+	BYTE* newData = (BYTE *)newRect.pBits;
+
+	//for (UINT y = 0; y < Bmp.Height(); y++) {
+	for (UINT y = 0; y < replacement_height; y++) {
+		RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
+		//for (UINT x = 0; x < Bmp.Width(); x++)											// works for textures of any size (e.g. 4-bit indexed)
+		for (UINT x = 0; x < replacement_width; x++) {
+			//RGBColor Color = Bmp[Bmp.Height() - y - 1][x];								// must flip image
+			RGBColor Color;
+			if (use_combined) {
+				Color = bmp_combined[replacement_height - y - 1][x];						// must flip image
+			} else if (y < replacement_height / 2) {										// set lower bits (because flipped)
+				if (use_lower)
+					Color = bmp_lower[bmp_lower.Height() - 1 - y][x];
+				else {
+					RGBColor* CurRow = (RGBColor*)(replaced_pData + (replaced_height - 1 - y / 4) * replaced_pitch);
+					Color = CurRow[(int)(x / RESIZE_FACTOR)];
+				}
+			} else {																		// set upper bits (because flipped)
+				if (use_upper) {
+					int upper_y = bmp_upper.Height() - 1 - y;
+					if (upper_y < 0) upper_y += bmp_upper.Height();							// if bmp_upper is only half a full replacement texture
+					Color = bmp_upper[upper_y][x];
+				} else {
+					RGBColor* CurRow = (RGBColor*)(replaced_pData + (replaced_height - 1 - y / 4) * replaced_pitch);
+					Color = CurRow[(int)(x / RESIZE_FACTOR)];
+				}
+			}
+			CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+		}
+	}
+	newtexture->UnlockRect(0);															// Texture loaded
+	return(HANDLE)newtexture;
 }
 
 
@@ -515,7 +521,7 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 	ofstream debug;
 	debug.open(DEBUG_LOG.string(), ofstream::out | ofstream::app);
 
-	bool cache_update = false;																			// if false, then Handle will need to be erased from handlecache
+	bool handle_used = false;																			// if false, Handle will be erased from the TextureCache
 	if (pTexture && Desc.Width < 640 && Desc.Height < 480 && Desc.Format == D3DFORMAT::D3DFMT_A8R8G8B8 && Desc.Pool == D3DPOOL::D3DPOOL_MANAGED)    //640x480 are video
 	{
 		D3DLOCKED_RECT Rect;
@@ -525,165 +531,101 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 
 		// get field matches using FNV hash
 		uint64 hash_combined = 0, hash_upper = 0, hash_lower = 0;
+		string field_combined = "", field_upper = "", field_lower = "";
 
 		// get hashes
 		hash_combined = FNV_Hash_Combined(pData, pitch, Desc.Width, Desc.Height, hash_upper, hash_lower, FNV_COORDS, FNV_COORDS_LEN, true);
 
-		// look for matching fields
-		fieldset_iter field_combined = fieldset.end();
-		fieldset_iter field_upper = fieldset.end();
-		fieldset_iter field_lower = fieldset.end();
+		uint64 hash_used;
+		bool use_combined = cache->contains(hash_combined);
 
-		bool field_found = get_fields(hash_combined, hash_upper, hash_lower, field_combined, field_upper, field_lower);
-
-		if (field_found) {
-			uint64 hash_used;
-			nhcache_map_iter ptr_to_replacement;
-			string field;
-
-			// figure out the game plan
-			if ((ptr_to_replacement = nh_map.find(hash_combined)) != nh_map.end()) {					// there is an existing newhandle for hash_combined; use it!
-				hash_used = hash_combined;
-			} else if (field_combined != fieldset.end()) {												// there is a matching field for hash_combined; create it!
-				field = *field_combined;
-				hash_used = hash_combined;
-			} else if ((ptr_to_replacement = nh_map.find(hash_upper)) != nh_map.end()) {				// there is an existing newhandle for hash_upper; use it!
-				hash_used = hash_upper;
-			} else if (field_upper != fieldset.end()) {													// there is a matching field for hash_upper; create it!
-				field = *field_upper;
-				hash_used = hash_upper;
-			} else if ((ptr_to_replacement = nh_map.find(hash_lower)) != nh_map.end()) {				// there is an existing newhandle for hash_lower; use it!
-				hash_used = hash_lower;
-			} else if (field_lower != fieldset.end()) {													// there is a matching field for hash_lower; create it!
-				field = *field_lower;
-				hash_used = hash_lower;
-			}
-			
-			if (ptr_to_replacement != nh_map.end()) {													// use an existing newhandle
-				/* UPDATE NH CACHE ACCESS ORDER */
-				nhcache_list_iter ptr_to_nh_list = ptr_to_replacement->second;
-
-				debug << "\tFOUND: (" << ptr_to_nh_list->first << ", " << ptr_to_nh_list->second << ") ";
-
-				// move (most-recently-accessed) list item to front of nh_list
-				nh_list.erase(ptr_to_nh_list);
-				debug << "Moving (" << ptr_to_nh_list->first << ", " << ptr_to_nh_list->second << ") to front of list: ";
-				nh_list.push_front(nhcache_item_t(ptr_to_nh_list->first, ptr_to_nh_list->second));
-
-				/* END UPDATE NH CACHE */
-
-				// erase now-invalidate handles from handlecache
-				reverse_handlecache_iter checkpointer = reverse_handlecache.find(ptr_to_replacement);
-				if (checkpointer != reverse_handlecache.end()) {										// when we moved the nh_list_item, we invalidated an entry in handlecache
-					handlecache.erase(checkpointer->second);
-					reverse_handlecache.erase(checkpointer);
-				}
-
-				cache_update = true;
-			} else {																					// create a new newhandle
-				string filename = "textures\\" + field.substr(0, 2) + "\\" + field.substr(0, field.rfind("_")) + "\\" + field + ".png";
-
-				ifstream ifile(filename);
-				if (ifile.fail()) {
-					debug << "Failed to load " << filename << endl;
-					debugtype = String("noreplace"); //No file, allow normal SetTexture
-				} else {																			// Load texture into cache
-					LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
-					IDirect3DTexture9* newtexture;
-					Bitmap Bmp;
-					Bmp.LoadPNG(String(filename.c_str()));
-					DWORD Usage = D3DUSAGE_AUTOGENMIPMAP;
-					D3DPOOL Pool = D3DPOOL_MANAGED;
-					D3DFORMAT Format = D3DFMT_A8R8G8B8;
-					Device->CreateTexture(int(RESIZE_FACTOR*(float)Desc.Width), int(RESIZE_FACTOR*(float)Desc.Height), 0, Usage, Format, Pool, &newtexture, NULL);
-					D3DLOCKED_RECT newRect;
-					newtexture->LockRect(0, &newRect, NULL, 0);
-					BYTE* newData = (BYTE *)newRect.pBits;
-					for (UINT y = 0; y < Bmp.Height(); y++) {
-						RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
-						for (UINT x = 0; x < Bmp.Width(); x++)									// works for textures of any size (e.g. 4-bit indexed)
-						{
-							RGBColor Color = Bmp[Bmp.Height() - y - 1][x];						// must flip image
-							CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
-						}
-					}
-					newtexture->UnlockRect(0); //Texture loaded
-					HANDLE tempnewhandle = (HANDLE)newtexture;
-
-					debug << "\tCREATED: (" << hash_used << ", " << tempnewhandle << ") ";
-
-					// we know hash is not in the nhcache, so add hash->tempnewhandle to nhcache
-					nh_list.push_front(nhcache_item_t(hash_used, tempnewhandle));
-					cache_update = true;
-
-					/* MAKE SURE NHCACHE IS THE CORRECT SIZE */
-					while (nh_list.size() > CACHE_SIZE) {										// "while" for completeness but this should only ever loop once
-						// get pointer to last (least recent) list item
-						nhcache_list_iter last_elem = nh_list.end();
-						--last_elem;
-
-						debug << "Removing (" << last_elem->first << ", " << last_elem->second << ") from back of list: ";
-
-						// dispose of texture
-						((IDirect3DTexture9*)last_elem->second)->Release();
-						last_elem->second = NULL;
-
-						// if we're going to delete an nh_map entry, we need to remove it from handlecache as well
-						nhcache_map_iter to_delete = nh_map.find(last_elem->first);
-						reverse_handlecache_iter backpointer = reverse_handlecache.find(to_delete);
-
-						if (backpointer != reverse_handlecache.end()) {							// is it even possible for handlecache to not contain to_delete?
-							handlecache.erase(backpointer->second);								// remove from both maps
-							reverse_handlecache.erase(backpointer);
-						}
-
-						// remove from map (this is why the nh_list stores pair<hash, handle>)
-						nh_map.erase(to_delete);
-						nhcache_map_iter temp_iter = nh_map.find(to_delete->first);
-						if (temp_iter == nh_map.end())
-							debug << "nh_map[" << last_elem->first << "] = NULL" << endl;
-						else
-							debug << "!!! nh_map[" << last_elem->first << "] = (" << nh_map[last_elem->first]->first << ", " << nh_map[last_elem->first]->second << ")" << endl;
-						// pop from list
-						nh_list.pop_back();
-
-						debug << "nh_list.size() = " << nh_list.size() << endl;
-					}
-					/* END MAKE SURE NHCACHE IS THE CORRECT SIZE */
-				}
-			}
-
-			if (cache_update) {
-
-				debug << "Adding (" << hash_used << ", " << nh_list.begin()->second << ") to front of list: ";
-
-				// update nh_map with new list item pointer
-				std::pair<nhcache_map_iter, bool> insertion = nh_map.insert(std::pair<uint64_t, nhcache_list_iter>(hash_used, nh_list.begin()));    // returns iterator to nh_map[hash_used] and boolean success
-				if (!insertion.second)															// if nh_map already contained hash, 
-					insertion.first->second = nh_list.begin();									// change nh_map[hash] to nh_list.begin()
-
-				debug << "nh_map[" << hash_used << "] = (" << nh_map[hash_used]->first << ", " << nh_map[hash_used]->second << ")" << endl;
-
-				handlecache[Handle] = insertion.first;											// insert in both maps
-				reverse_handlecache[insertion.first] = Handle;
-			}
-
-			debug << endl << endl;
+		if (use_combined) {														// there is an existing newhandle for hash_combined; use it!
+			cache->insert(Handle, hash_combined);
+			handle_used = true;
+			debug << "use_combined" << endl;
 		} else {
-			//debug << "NO MATCH";
+			// look for matching fields
+			get_fields(hash_combined, hash_upper, hash_lower, field_combined, field_upper, field_lower);
+			bool create_combined = !field_combined.empty();
+
+			if (create_combined) {												// there is a matching field for hash_combined; create it!
+				debug << "create_combined from " << field_combined << "... ";
+				HANDLE newhandle = create_newhandle(pData, Desc.Width, Desc.Height, pitch, &field_combined, NULL, NULL);
+				if (newhandle) {
+					cache->insert(Handle, hash_combined, newhandle);
+					handle_used = true;
+					debug << "succeeded!" << endl;;
+				} else
+					debug << "failed..." << endl;;
+			} else {
+				bool use_upper = cache->contains(hash_upper);
+				bool use_lower = cache->contains(hash_lower);
+
+				if (use_upper && use_lower) {									// there are existing newhandles for hash_upper and hash_lower; combine them!
+
+					debug << "use_upper && use_lower (not yet implemented)" << endl;
+				} else {
+					bool create_upper = !field_upper.empty();
+					bool create_lower = !field_lower.empty();
+
+					if (create_upper && create_lower) {							// there are matching fields for hash_upper and hash_lower; create a combination!
+						debug << "create_upper && create_lower from " << field_upper << " and " << field_lower << "... ";
+						HANDLE newhandle = create_newhandle(pData, Desc.Width, Desc.Height, pitch, NULL, &field_upper, &field_lower);
+						if (newhandle) {
+							cache->insert(Handle, hash_combined, newhandle);
+							handle_used = true;
+							debug << "succeeded!" << endl;;
+						} else
+							debug << "failed..." << endl;;
+					} else if (use_upper) {										// there is an existing newhandle for hash_upper; use it!
+						cache->insert(Handle, hash_upper);						// TODO: this is wrong, need to create a new texture from existing newhandle upper half and Handle lower half
+						handle_used = true;
+						debug << "use_upper only" << endl;
+					} else if (use_lower) {										// there is an existing newhandle for hash_lower; use it!
+						cache->insert(Handle, hash_lower);						// TODO: this is wrong, need to create a new texture from existing newhandle lower half and Handle upper half
+						handle_used = true;
+						debug << "use_lower only" << endl;
+					} else if (create_upper) {									// there is a matching field for hash_upper; create it!
+						debug << "create_upper from " << field_upper << "... ";
+						//HANDLE newhandle = create_newhandle(pData, Desc.Width, Desc.Height, pitch, NULL, &field_upper, NULL);
+						HANDLE newhandle = create_newhandle(pData, Desc.Width, Desc.Height, pitch, &field_upper, NULL, NULL);
+						if (newhandle) {
+							//cache->insert(Handle, hash_combined, newhandle);	// TODO: this is wrong, need to store at hash_upper
+							cache->insert(Handle, hash_upper, newhandle);
+							handle_used = true;
+							debug << "succeeded!" << endl;;
+						} else
+							debug << "failed..." << endl;;
+					} else if (create_lower) {									// there is a matching field for hash_lower; create it!
+						debug << "create_lower from " << field_lower << "... ";
+						HANDLE newhandle = create_newhandle(pData, Desc.Width, Desc.Height, pitch, NULL, NULL, &field_lower);
+						if (newhandle) {
+							cache->insert(Handle, hash_combined, newhandle);	// TODO: this is wrong, need to store at hash_lower
+							handle_used = true;
+							debug << "succeeded!" << endl;;
+						} else
+							debug << "failed..." << endl;;
+					} else {													// NO MATCH
+						if (Desc.Width > 0 && Desc.Height > 0) {
+							if (nomatch_set.insert(hash_combined).second) {		// only write the image if it was not previously written
+								pTexture->UnlockRect(0);
+								ofstream nomatch(NOMATCH_LOG.string(), ofstream::out | ofstream::app);
+								ostringstream sstream;
+								sstream << (DEBUG_DIR / "nomatch\\").string() << texture_count << ".bmp";
+								D3DXSaveTextureToFile(sstream.str().c_str(), D3DXIFF_BMP, pTexture, NULL);
+								nomatch << texture_count << "," << hash_combined << "," << hash_upper << "," << hash_lower << endl;
+							}
+						}
+					}
+				}
+			}
 		}
 		pTexture->UnlockRect(0); //Finished reading pTextures bits
 	} else { //Video textures/improper format
 		//debug << "IMPROPER FORMAT";
 	}
 
-	if (!cache_update) {
-		handlecache_iter iter;
-		if (handlecache.size() > 0 && ((iter = handlecache.find(Handle)) != handlecache.end())) {
-			reverse_handlecache.erase(iter->second);            // Handle has been recycled, so any old cache entries should be removed from both maps
-			handlecache.erase(iter);
-		}
-	}
+	if (!handle_used) cache->erase(Handle);
 
 	debug.close();
 	//if (debugtype == String("")) { debugtype = String("error"); }
@@ -698,21 +640,12 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 bool GlobalContext::SetTexture(DWORD Stage, HANDLE* SurfaceHandles, UINT SurfaceHandleCount)
 {
 	for (int j = 0; j < SurfaceHandleCount; j++) {
-		if (SurfaceHandles[j]) {
-			handlecache_iter ptr_to_replacement;
-			if (handlecache.size() > 0 && (ptr_to_replacement = handlecache.find(SurfaceHandles[j])) != handlecache.end())   //SurfaceHandles[j] found on handlecache
-			{
-				IDirect3DTexture9* newtexture = NULL;
-				newtexture = (IDirect3DTexture9*)ptr_to_replacement->second->second->second;	//ptr_to_replacement->second =                 pointer to nh_map
-																								//ptr_to_replacement->second->second =         pointer to nh_list
-																								//ptr_to_replacement->second->second->second = pointer to replacement HANDLE
-				if (newtexture) {
-					g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
-					//((IDirect3DTexture9*)SurfaceHandles[j])->Release();
-					return true;
-				}   //Texture replaced!
-			}
-		}
+		IDirect3DTexture9* newtexture;
+		if (SurfaceHandles[j] && (newtexture = (IDirect3DTexture9*)cache->at(SurfaceHandles[j]))) {
+			g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
+			//((IDirect3DTexture9*)SurfaceHandles[j])->Release();
+			return true;
+		} // Texture replaced!
 	}
 	return false;
 }
