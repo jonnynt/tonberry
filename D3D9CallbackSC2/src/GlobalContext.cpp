@@ -216,13 +216,10 @@ void load_fieldmaps()
 }
 
 void GlobalContext::Init()
-{
-	cache = new TextureCache(CACHE_SIZE);
-	fieldmap = new FieldMap();
-	
+{	
 	ofstream debug(DEBUG_LOG.string(), ofstream::out | ofstream::trunc);
 	std::time_t time = std::time(nullptr);
-	debug << "Initialized " << asctime(localtime(&time)) << endl << endl;
+	debug << "Initialized " << asctime(localtime(&time)) << endl;
 
 	ofstream nomatch(NOMATCH_LOG.string(), ofstream::out | ofstream::trunc);
 	nomatch << "Initialized " << asctime(localtime(&time)) << endl << endl;
@@ -230,8 +227,12 @@ void GlobalContext::Init()
 	Graphics.Init();
 	load_prefs();
 	debug << "prefs.txt loaded." << endl;
+
+	cache = new TextureCache(CACHE_SIZE);
+	fieldmap = new FieldMap();
+
 	load_fieldmaps();
-	debug << "hashmap loaded." << endl;
+	debug << "hashmap loaded." << endl << endl;
 
 	debug << "fieldmap:" << endl;
 	fieldmap->writeMap(debug);
@@ -415,6 +416,7 @@ bool get_fields(const uint64& hash_combined, const uint64& hash_upper, const uin
 
 HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced_height, UINT replaced_pitch, const string* field_combined, const string* field_upper = NULL, const string* field_lower = NULL)
 {
+	ofstream debug((DEBUG_DIR / "create_newhandle.log").string(), ofstream::out | ofstream::trunc);
 	bool use_combined, use_upper = false, use_lower = false;
 	fs::path path_combined, path_upper, path_lower;
 	ifstream ifile_combined, ifile_upper, ifile_lower;
@@ -424,10 +426,15 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 	if (use_combined) {
 		// get texture path from field name
 		path_combined = ((((TEXTURES_DIR / field_combined->substr(0, 2))) / field_combined->substr(0, field_combined->rfind("_"))) / (*field_combined + ".png"));
+		debug << "Loading combined from " << path_combined << "... ";
 
 		// load file_combined
 		ifile_combined.open(path_combined.string());
-		if (ifile_combined.fail()) return NULL;													// file could not be opened, so no texture can be created
+		if (ifile_combined.fail()) {
+			debug << "failed." << endl;
+			return NULL;													// file could not be opened, so no texture can be created
+		}
+		debug << "succeeded!" << endl;
 	} else {
 		use_upper = (field_upper != NULL && !field_upper->empty());
 		use_lower = (field_lower != NULL && !field_lower->empty());
@@ -435,19 +442,29 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 		if (use_upper) {
 			// get texture path from field name
 			path_upper = ((((TEXTURES_DIR / field_upper->substr(0, 2))) / field_upper->substr(0, field_upper->rfind("_"))) / (*field_upper + ".png"));
+			debug << "Loading upper from " << path_upper << "... ";
 
 			// load file_upper
 			ifile_upper.open(path_upper.string());
-			if (ifile_upper.fail()) use_upper = false;											// file could not be opened, so do not use upper half
+			if (ifile_lower.fail()) {
+				debug << "failed." << endl;
+				use_upper = false;											// file could not be opened, so do not use upper half
+			}
+			debug << "succeeded!" << endl;
 		}
 
 		if (use_lower) {
 			// get texture path from field name
 			path_lower = ((((TEXTURES_DIR / field_lower->substr(0, 2))) / field_lower->substr(0, field_lower->rfind("_"))) / (*field_lower + ".png"));
+			debug << "Loading lower from " << path_lower << "... ";
 
 			// load file_lower
 			ifile_lower.open(path_lower.string());
-			if (ifile_lower.fail()) use_upper = false;											// file could not be opened, so do not use upper half
+			if (ifile_lower.fail()) {
+				debug << "failed." << endl;
+				use_lower = false;											// file could not be opened, so do not use upper half
+			}
+			debug << "succeeded!" << endl;
 		}
 
 		if (!use_upper && !use_lower) return NULL;												// neither file could be loaded, so no texture can be created
@@ -458,18 +475,24 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 	Bitmap bmp_combined, bmp_upper, bmp_lower;
 
 	// load replacement bitmaps
-	if (use_combined)
+	if (use_combined) {
 		bmp_combined.LoadPNG(String(path_combined.string().c_str()));
-	else {
-		if (use_upper)
+		debug << path_combined << ": " << bmp_combined.Width() << "x" << bmp_combined.Height() << endl;
+	} else {
+		if (use_upper) {
 			bmp_upper.LoadPNG(String(path_upper.string().c_str()));
-		if (use_lower)
+			debug << path_upper << ": " << bmp_upper.Width() << "x" << bmp_upper.Height() << endl;
+		}
+		if (use_lower) {
 			bmp_lower.LoadPNG(String(path_lower.string().c_str()));
+			debug << path_lower << ": " << bmp_lower.Width() << "x" << bmp_lower.Height() << endl;
+		}
 	}
 
 	// initialize newtexture
 	int replacement_width	= int(RESIZE_FACTOR * (float)replaced_width);
 	int replacement_height	= int(RESIZE_FACTOR * (float)replaced_height);
+	debug << "Replacement Texture: " << replacement_width << "x" << replacement_height << endl;
 	Device->CreateTexture(replacement_width, replacement_height, 0, D3DUSAGE_AUTOGENMIPMAP, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newtexture, NULL);
 
 	// load image data into newtexture
@@ -477,36 +500,59 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 	newtexture->LockRect(0, &newRect, NULL, 0);
 	BYTE* newData = (BYTE *)newRect.pBits;
 
-	//for (UINT y = 0; y < Bmp.Height(); y++) {
+	debug << "Copying Pixels:" << endl;
 	for (UINT y = 0; y < replacement_height; y++) {
+		//debug << "\t" << y << ":";
 		RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
-		//for (UINT x = 0; x < Bmp.Width(); x++)											// works for textures of any size (e.g. 4-bit indexed)
-		for (UINT x = 0; x < replacement_width; x++) {
-			//RGBColor Color = Bmp[Bmp.Height() - y - 1][x];								// must flip image
-			RGBColor Color;
-			if (use_combined) {
+		if (use_combined) {
+			for (UINT x = 0; x < replacement_width; x++) {
+				//debug << " " << x;
+				RGBColor Color;
 				Color = bmp_combined[replacement_height - y - 1][x];						// must flip image
-			} else if (y < replacement_height / 2) {										// set lower bits (because flipped)
-				if (use_lower)
+				CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+			}
+		} else if (y < replacement_height / 2) {											// set lower bits (because flipped)
+			if (use_lower) {																// use pixels from bmp_lower
+				for (UINT x = 0; x < replacement_width; x++) {
+					//debug << " " << x;
+					RGBColor Color;
 					Color = bmp_lower[bmp_lower.Height() - 1 - y][x];
-				else {
+					CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+				}
+			} else {																		// use upscaled pixels from replaced pData
+				for (UINT x = 0; x < replacement_width; x++) {
+					//debug << " " << x;
+					RGBColor Color;
 					RGBColor* CurRow = (RGBColor*)(replaced_pData + (replaced_height - 1 - y / 4) * replaced_pitch);
 					Color = CurRow[(int)(x / RESIZE_FACTOR)];
+					CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
 				}
-			} else {																		// set upper bits (because flipped)
-				if (use_upper) {
+			}
+		} else {																			// set upper bits (because flipped)
+			if (use_upper) {																// use pixels from bmp_upper
+				for (UINT x = 0; x < replacement_width; x++) {
+					//debug << " " << x;
+					RGBColor Color;
 					int upper_y = bmp_upper.Height() - 1 - y;
 					if (upper_y < 0) upper_y += bmp_upper.Height();							// if bmp_upper is only half a full replacement texture
 					Color = bmp_upper[upper_y][x];
-				} else {
+					CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+				}
+			} else {																		// use upscaled pixels from replaced pData
+				for (UINT x = 0; x < replacement_width; x++) {
+					//debug << " " << x;
+					RGBColor Color;
 					RGBColor* CurRow = (RGBColor*)(replaced_pData + (replaced_height - 1 - y / 4) * replaced_pitch);
 					Color = CurRow[(int)(x / RESIZE_FACTOR)];
+					CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
 				}
 			}
-			CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
 		}
+		//debug << endl;
 	}
 	newtexture->UnlockRect(0);															// Texture loaded
+	debug << "Texture loaded successfully." << endl;
+	debug.close();
 	return(HANDLE)newtexture;
 }
 
@@ -539,21 +585,21 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 		bool use_combined = cache->contains(hash_combined);
 
 		if (use_combined) {														// there is an existing newhandle for hash_combined; use it!
+			debug << "use_combined (" << hash_combined << ")" << endl;
 			cache->insert(Handle, hash_combined);
 			handle_used = true;
-			debug << "use_combined" << endl;
 		} else {
 			// look for matching fields
 			get_fields(hash_combined, hash_upper, hash_lower, field_combined, field_upper, field_lower);
 			bool create_combined = !field_combined.empty();
 
 			if (create_combined) {												// there is a matching field for hash_combined; create it!
-				debug << "create_combined from " << field_combined << "... ";
+				debug << "create_combined (" << hash_combined << ") from " << field_combined << "... ";
 				HANDLE newhandle = create_newhandle(pData, Desc.Width, Desc.Height, pitch, &field_combined, NULL, NULL);
 				if (newhandle) {
+					debug << "succeeded!" << endl;;
 					cache->insert(Handle, hash_combined, newhandle);
 					handle_used = true;
-					debug << "succeeded!" << endl;;
 				} else
 					debug << "failed..." << endl;;
 			} else {
@@ -568,40 +614,40 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 					bool create_lower = !field_lower.empty();
 
 					if (create_upper && create_lower) {							// there are matching fields for hash_upper and hash_lower; create a combination!
-						debug << "create_upper && create_lower from " << field_upper << " and " << field_lower << "... ";
+						debug << "create_upper (" << hash_upper << ") && create_lower (" << hash_lower << ") from " << field_upper << " and " << field_lower << "... ";
 						HANDLE newhandle = create_newhandle(pData, Desc.Width, Desc.Height, pitch, NULL, &field_upper, &field_lower);
 						if (newhandle) {
+							debug << "succeeded!" << endl;;
 							cache->insert(Handle, hash_combined, newhandle);
 							handle_used = true;
-							debug << "succeeded!" << endl;;
 						} else
 							debug << "failed..." << endl;;
 					} else if (use_upper) {										// there is an existing newhandle for hash_upper; use it!
+						debug << "use_upper (" << hash_upper << ") only." << endl;
 						cache->insert(Handle, hash_upper);						// TODO: this is wrong, need to create a new texture from existing newhandle upper half and Handle lower half
 						handle_used = true;
-						debug << "use_upper only" << endl;
 					} else if (use_lower) {										// there is an existing newhandle for hash_lower; use it!
+						debug << "use_lower (" << hash_lower << ") only." << endl;
 						cache->insert(Handle, hash_lower);						// TODO: this is wrong, need to create a new texture from existing newhandle lower half and Handle upper half
 						handle_used = true;
-						debug << "use_lower only" << endl;
 					} else if (create_upper) {									// there is a matching field for hash_upper; create it!
-						debug << "create_upper from " << field_upper << "... ";
+						debug << "create_upper (" << hash_upper << ") from " << field_upper << "... ";
 						//HANDLE newhandle = create_newhandle(pData, Desc.Width, Desc.Height, pitch, NULL, &field_upper, NULL);
 						HANDLE newhandle = create_newhandle(pData, Desc.Width, Desc.Height, pitch, &field_upper, NULL, NULL);
 						if (newhandle) {
 							//cache->insert(Handle, hash_combined, newhandle);	// TODO: this is wrong, need to store at hash_upper
+							debug << "succeeded!" << endl;;
 							cache->insert(Handle, hash_upper, newhandle);
 							handle_used = true;
-							debug << "succeeded!" << endl;;
 						} else
 							debug << "failed..." << endl;;
 					} else if (create_lower) {									// there is a matching field for hash_lower; create it!
-						debug << "create_lower from " << field_lower << "... ";
+						debug << "create_lower (" << hash_lower << ") from " << field_lower << "... ";
 						HANDLE newhandle = create_newhandle(pData, Desc.Width, Desc.Height, pitch, NULL, NULL, &field_lower);
 						if (newhandle) {
+							debug << "succeeded!" << endl;;
 							cache->insert(Handle, hash_combined, newhandle);	// TODO: this is wrong, need to store at hash_lower
 							handle_used = true;
-							debug << "succeeded!" << endl;;
 						} else
 							debug << "failed..." << endl;;
 					} else {													// NO MATCH

@@ -21,7 +21,7 @@ private:
 	struct fieldset_iter_hasher
 	{
 		size_t operator()(fieldset_iter iter) const
-		{						// since fieldset entries are unique, use field to hash fieldset_iter
+		{						// since fieldset entries are unique, use the pointer of the field to hash fieldset_iter
 			return std::hash<const string*>()(&*iter);
 		}
 	};
