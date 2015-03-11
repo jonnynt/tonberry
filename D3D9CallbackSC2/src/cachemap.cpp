@@ -1,6 +1,8 @@
 #include "Main.h"
 #include "cachemap.h"
 
+#include <fstream>
+std::string debug_file = "tonberry\\debug\\hash_debug.log";
 
 size_t FieldMap::count(uint64 hash)
 {
@@ -76,22 +78,11 @@ void FieldMap::writeMap(ofstream& out)
 TextureCache::TextureCache(unsigned max_size)
 {
 	entries			= 0;
-	this->max_size	= max_size;
+	this->max_size = max_size;
+
+	ofstream debug(debug_file, fstream::out | fstream::trunc);
+	debug.close();
 }
-
-
-void TextureCache::map_insert(uint64 hash, nhcache_list_iter item, HANDLE replaced)
-{
-	// update nh_map with new list item pointer
-	std::pair<nhcache_map_iter, bool> insertion = nh_map.insert(							// returns iterator to nh_map[hash_used] and boolean success
-		std::pair<uint64, nhcache_list_iter>(hash, item));		
-	if (!insertion.second)																	// if nh_map already contained hash, 
-		insertion.first->second = nh_list.begin();											// change nh_map[hash] to nh_list.begin()
-
-	handlecache[replaced] = insertion.first;												// insert in both handlecache maps
-	reverse_handlecache[insertion.first] = replaced;
-}
-
 
 bool TextureCache::contains(uint64 hash)
 {
@@ -121,68 +112,92 @@ HANDLE TextureCache::at(HANDLE replaced)
 
 	if (iter == handlecache.end()) return NULL;
 
-	return iter->second->second->second;
+	return nh_map[iter->second]->second;
+}
+
+
+void TextureCache::map_insert(uint64 hash, nhcache_list_iter item, HANDLE replaced)
+{
+	// update nh_map with new list item pointer
+	std::pair<nhcache_map_iter, bool> insertion = nh_map.insert(							// returns iterator to nh_map[hash_used] and boolean success
+		std::pair<uint64, nhcache_list_iter>(hash, item));
+	if (!insertion.second)																	// if nh_map already contained hash, 
+		insertion.first->second = nh_list.begin();											// change nh_map[hash] to nh_list.begin()
+
+	handlecache[replaced] = hash;															// insert in both handlecache maps
+	reverse_handlecache.insert(pair<uint64, HANDLE>(hash, replaced));
 }
 
 
 void TextureCache::insert(HANDLE replaced, uint64 hash)
 {
+	ofstream debug(debug_file, ofstream::out | ofstream::app);
+
+	debug << "Inserting (" << replaced << " :-> nh_map[" << hash << "] = " << nh_map[hash]->second << "):" << endl;
 	nhcache_map_iter updated = nh_map.find(hash);
 	if (updated == nh_map.end()) return;
 
 	/* UPDATE NH CACHE ACCESS ORDER */
-	nhcache_list_iter ptr_to_nh_list = updated->second;
+	nhcache_list_iter item = updated->second;
 
+	debug << "\tMoving (" << item->first << ", " << item->second << ") to front of nh_list: nh_list.begin() = ";
 	// move (most-recently-accessed) list item to front of nh_list
-	nh_list.erase(ptr_to_nh_list);
-	nh_list.push_front(*ptr_to_nh_list);
+	nh_list.erase(item);
+	nh_list.push_front(*item);
+	debug << "(" << nh_list.begin()->first << ", " << nh_list.begin()->second << ")" << endl;
 
-	/* END UPDATE NH CACHE ACCESS ORDER */
-
-	// erase now-invalidate handles from handlecache
-	reverse_handlecache_iter checkpointer = reverse_handlecache.find(updated);
-	if (checkpointer != reverse_handlecache.end()) {										// when we moved the nh_list_item, we invalidated an entry in handlecache
-		handlecache.erase(checkpointer->second);
-		reverse_handlecache.erase(checkpointer);
-	}
-
+	debug << "\tAdding (" << replaced << ", " << nh_list.begin()->first << ") with new nh_map entry to handlecache:";
 	map_insert(hash, nh_list.begin(), replaced);
+	debug << " (" << replaced << ", " << hash << "); nh_map[" << hash << "] = " << nh_map[hash]->second << endl;
+	debug.close();
 }
 
 
 void TextureCache::insert(HANDLE replaced, uint64 hash, HANDLE replacement)
 {
+	ofstream debug(debug_file, ofstream::out | ofstream::app);
+	debug << "Inserting (" << replaced << " :-> (" << hash << ", " << replacement << "):" << endl;
+
+	debug << "\tInserting (" << hash << ", " << replacement << ") at front of nh_list: nh_list.begin() = ";
 	nh_list.push_front(nhcache_item_t(hash, replacement));
+	debug << "(" << nh_list.begin()->first << ", " << nh_list.begin()->second << ")" << endl;
 
 	/* MAKE SURE NHCACHE IS THE CORRECT SIZE */
 	while (nh_list.size() > max_size) {														// "while" for completeness but this should only ever loop once
 		// get pointer to last (least recent) list item
 		nhcache_list_iter last_elem = nh_list.end();
 		--last_elem;
+		debug << "\tRemoving (" << last_elem->first << ", " << last_elem->second << ") from back of nh_list." << endl;
 
 		// dispose of texture
 		((IDirect3DTexture9*)last_elem->second)->Release();
 		last_elem->second = NULL;
 
-		// if we're going to delete an nh_map entry, we need to remove it from handlecache as well
+		// if we're going to delete a hash from the nh_map, we need to first remove entries that map to that hash from the handlecache
 		nhcache_map_iter to_delete = nh_map.find(last_elem->first);
-		reverse_handlecache_iter backpointer = reverse_handlecache.find(to_delete);
+		pair<reverse_handlecache_iter, reverse_handlecache_iter> backpointer_range =
+			reverse_handlecache.equal_range(last_elem->first);
 
-		if (backpointer != reverse_handlecache.end()) {										// is it even possible for handlecache to not contain to_delete?
+		reverse_handlecache_iter backpointer = backpointer_range.first;
+		for (; backpointer != backpointer_range.second && backpointer != reverse_handlecache.end(); backpointer++) {
+			debug << "\tRemoving (" << backpointer->second << ", " << backpointer->first << ") from handlecache." << endl;
 			handlecache.erase(backpointer->second);											// remove from both maps
 			reverse_handlecache.erase(backpointer);
 		}
 
 		// remove from map (this is why the nh_list stores pair<hash, handle>)
+		debug << "\tRemoving (" << to_delete->first << ", (" << to_delete->second->first << ", " << to_delete->second->second << ")) from nh_map." << endl;
 		nh_map.erase(to_delete);
-		nhcache_map_iter temp_iter = nh_map.find(to_delete->first);
 
 		// pop from list
 		nh_list.pop_back();
 	}
 	/* END MAKE SURE NHCACHE IS THE CORRECT SIZE */
 
+	debug << "\tAdding (" << replaced << ", (" << nh_list.begin()->first << ") with new nh_map entry to handleacche:";
 	map_insert(hash, nh_list.begin(), replaced);
+	debug << " (" << replaced << ", " << hash << "); nh_map[" << hash << "] = " << nh_map[hash]->second << endl;
+	debug.close();
 }
 
 void TextureCache::erase(HANDLE replaced)

@@ -13,7 +13,7 @@ typedef unsigned long long uint64;
 class FieldMap
 {
 private:
-	typedef unordered_set<string> fieldset_t;								// holds field names
+	typedef set<string> fieldset_t;								// holds field names
 	typedef fieldset_t::const_iterator fieldset_iter;						// points to field names
 
 	fieldset_t fieldset;
@@ -22,7 +22,7 @@ private:
 	{
 		size_t operator()(fieldset_iter iter) const
 		{						// since fieldset entries are unique, use field to hash fieldset_iter
-			return std::hash<string>()(*iter);
+			return std::hash<const string*>()(&*iter);
 		}
 	};
 
@@ -95,18 +95,10 @@ private:
 	typedef unordered_map<uint64, nhcache_list_iter>	nhcache_map_t;			// maps hashes to an entry in the newhandle list
 	typedef nhcache_map_t::iterator						nhcache_map_iter;
 
-	typedef unordered_map<HANDLE, nhcache_map_iter>		handlecache_t;			// maps handles to an entry in the nhcache map
+	typedef unordered_map<HANDLE, uint64>				handlecache_t;			// maps a handle to a hash that has an entry in a nhcache_map_t
 	typedef handlecache_t::iterator						handlecache_iter;
 
-	typedef struct nhcache_map_iter_hasher
-	{
-		size_t operator()(nhcache_map_iter iter) const
-		{
-			return iter->first;													// use nhcache entry hash to index reverse_handlecache
-		}
-	};
-
-	typedef unordered_map<nhcache_map_iter, HANDLE, nhcache_map_iter_hasher> reverse_handlecache_t;	// reverse indexing of handlecache; needed for when values in handlecache are removed from the nhcache
+	typedef unordered_multimap<uint64, HANDLE>			reverse_handlecache_t;	// reverse indexing of handlecache; needed for when values in handlecache are removed from the nhcache
 	typedef reverse_handlecache_t::iterator				reverse_handlecache_iter;
 
 	// together these make nhcache:
@@ -143,7 +135,6 @@ public:
 	bool TextureCache::contains(HANDLE replaced	// the HANDLE to find
 		);
 
-
 	/*at: access an element in the nhcache
 	  returns: a reference to the HANDLE mapped to hash in the nhcache if it exists, or else null
 	*/
@@ -157,14 +148,14 @@ public:
 		);
 
 
-	/*insert: if nh_map[hash] exists, inserts replaced :-> hash :-> nh_map[hash] into the cache,
+	/*insert: if nh_map[hash] exists, inserts replaced :-> hash into the handlecache cache,
 			  else does nothing
 	*/
 	void insert(HANDLE replaced,	// the handlecache key
 				uint64 hash			// the nhcache key
 		);
 
-	/*insert: inserts replaced :-> hash :-> replacement into the cache
+	/*insert: inserts replaced :-> hash into the cache and hash :-> replacement into the nhcache
 	  PRECONDITIONS:
 		- hash is not on the cache
 		- replacement has been created

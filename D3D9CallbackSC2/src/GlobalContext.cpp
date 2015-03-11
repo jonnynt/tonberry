@@ -518,8 +518,7 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 
 	String debugtype = String("");
 
-	ofstream debug;
-	debug.open(DEBUG_LOG.string(), ofstream::out | ofstream::app);
+	ofstream debug(DEBUG_LOG.string(), ofstream::out | ofstream::app);
 
 	bool handle_used = false;																			// if false, Handle will be erased from the TextureCache
 	if (pTexture && Desc.Width < 640 && Desc.Height < 480 && Desc.Format == D3DFORMAT::D3DFMT_A8R8G8B8 && Desc.Pool == D3DPOOL::D3DPOOL_MANAGED)    //640x480 are video
@@ -614,6 +613,7 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 								sstream << (DEBUG_DIR / "nomatch\\").string() << texture_count << ".bmp";
 								D3DXSaveTextureToFile(sstream.str().c_str(), D3DXIFF_BMP, pTexture, NULL);
 								nomatch << texture_count << "," << hash_combined << "," << hash_upper << "," << hash_lower << endl;
+								nomatch.close();
 							}
 						}
 					}
