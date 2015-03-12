@@ -1,5 +1,6 @@
 #include "Main.h"
 #include "cachemap.h"
+#include "md5.h"
 #include <stdint.h>
 #include <sstream>
 #include <boost/filesystem.hpp>
@@ -287,6 +288,28 @@ uint64 FNV_Hash(BYTE* pData, UINT pitch, int width, int height, const coord* coo
 	return hash;
 }
 
+uint64 FNV_Hash_Full(BYTE* pData, UINT pitch, int width, int height)
+{
+	uint64 hash = FNV_OFFSET_BASIS;
+
+	float red = 0, green = 0, blue = 0;
+	size_t coord_count = 0;
+	for (int y = 0; y < height; y++) {
+		RGBColor* CurRow = (RGBColor*)(pData + y * pitch);
+		for (int x = 0; x < width; x++) {
+			RGBColor Color = CurRow[x];
+			hash ^= Color.r;
+			hash *= FNV_OFFSET_PRIME;
+			hash ^= Color.g;
+			hash *= FNV_OFFSET_PRIME;
+			hash ^= Color.b;
+			hash *= FNV_OFFSET_PRIME;
+		}
+	}
+
+	return hash;
+}
+
 // hash upper, lower, and combined separately 
 uint64 FNV_Hash_Combined(BYTE* pData, UINT pitch, int width, int height, uint64& hash_upper, uint64& hash_lower, const coord* coords, const int len, bool use_RGB = true)
 {
@@ -414,6 +437,8 @@ bool get_fields(const uint64& hash_combined, const uint64& hash_upper, const uin
 	return (fieldmap->get_first_field(hash_upper, field_upper) || fieldmap->get_first_field(hash_lower, field_lower));
 }
 
+#define min(a, b) ((a <= b) ? a : b)
+
 HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced_height, UINT replaced_pitch, const string* field_combined, const string* field_upper = NULL, const string* field_lower = NULL)
 {
 	ofstream debug((DEBUG_DIR / "create_newhandle.log").string(), ofstream::out | ofstream::trunc);
@@ -490,9 +515,9 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 	}
 
 	// initialize newtexture
-	int replacement_width	= int(RESIZE_FACTOR * (float)replaced_width);
-	int replacement_height	= int(RESIZE_FACTOR * (float)replaced_height);
-	debug << "Replacement Texture: " << replacement_width << "x" << replacement_height << endl;
+	int replacement_width = int(RESIZE_FACTOR * (float)replaced_width);
+	int replacement_height = int(RESIZE_FACTOR * (float)replaced_height);
+	debug << "New Texture: " << replacement_width << "x" << replacement_height << endl;
 	Device->CreateTexture(replacement_width, replacement_height, 0, D3DUSAGE_AUTOGENMIPMAP, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newtexture, NULL);
 
 	// load image data into newtexture
@@ -504,25 +529,27 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 	for (UINT y = 0; y < replacement_height; y++) {
 		//debug << "\t" << y << ":";
 		RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
+		RGBColor Color;
 		if (use_combined) {
 			for (UINT x = 0; x < replacement_width; x++) {
 				//debug << " " << x;
-				RGBColor Color;
-				Color = bmp_combined[replacement_height - y - 1][x];						// must flip image
-				CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+				if (x < bmp_combined.Width() && y < bmp_combined.Height()) {				// respect texture sizes
+					Color = bmp_combined[replacement_height - y - 1][x];					// must flip image
+					CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+				}
 			}
 		} else if (y < replacement_height / 2) {											// set lower bits (because flipped)
 			if (use_lower) {																// use pixels from bmp_lower
 				for (UINT x = 0; x < replacement_width; x++) {
 					//debug << " " << x;
-					RGBColor Color;
-					Color = bmp_lower[bmp_lower.Height() - 1 - y][x];
-					CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+					if (x < bmp_lower.Width() && y < bmp_lower.Height()) {					// respect texture sizes
+						Color = bmp_lower[bmp_lower.Height() - 1 - y][x];
+						CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+					}
 				}
 			} else {																		// use upscaled pixels from replaced pData
 				for (UINT x = 0; x < replacement_width; x++) {
 					//debug << " " << x;
-					RGBColor Color;
 					RGBColor* CurRow = (RGBColor*)(replaced_pData + (replaced_height - 1 - y / 4) * replaced_pitch);
 					Color = CurRow[(int)(x / RESIZE_FACTOR)];
 					CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
@@ -532,16 +559,16 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 			if (use_upper) {																// use pixels from bmp_upper
 				for (UINT x = 0; x < replacement_width; x++) {
 					//debug << " " << x;
-					RGBColor Color;
 					int upper_y = bmp_upper.Height() - 1 - y;
 					if (upper_y < 0) upper_y += bmp_upper.Height();							// if bmp_upper is only half a full replacement texture
-					Color = bmp_upper[upper_y][x];
-					CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+					if (x < bmp_upper.Width() && upper_y < bmp_upper.Height()) {			// respect texture sizes
+						Color = bmp_upper[upper_y][x];
+						CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+					}
 				}
 			} else {																		// use upscaled pixels from replaced pData
 				for (UINT x = 0; x < replacement_width; x++) {
 					//debug << " " << x;
-					RGBColor Color;
 					RGBColor* CurRow = (RGBColor*)(replaced_pData + (replaced_height - 1 - y / 4) * replaced_pitch);
 					Color = CurRow[(int)(x / RESIZE_FACTOR)];
 					CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
@@ -554,6 +581,28 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 	debug << "Texture loaded successfully." << endl;
 	debug.close();
 	return(HANDLE)newtexture;
+}
+
+string md5(BYTE* pData, UINT width, UINT height, UINT pitch)
+{
+	MD5 md5;
+	UINT hash_width = width;// min(width, VRAM_DIM / 2);
+	uchar* buf = new uchar[hash_width * height * 3];
+	int i = 0;
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < hash_width; x++) {
+			RGBColor* CurRow = (RGBColor*)(pData + y * pitch);
+			RGBColor Color = CurRow[x];
+			buf[i++] = Color.r;
+			buf[i++] = Color.g;
+			buf[i++] = Color.b;
+		}
+	}
+	md5.update(buf, 128 * 256);
+	md5.finalize();
+	std::string hash = md5.hexdigest();
+	delete[] buf;
+	return hash;
 }
 
 
@@ -652,14 +701,17 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 							debug << "failed..." << endl;;
 					} else {													// NO MATCH
 						if (Desc.Width > 0 && Desc.Height > 0) {
-							if (nomatch_set.insert(hash_combined).second) {		// only write the image if it was not previously written
+							uint64 hash = FNV_Hash_Full(pData, pitch, Desc.Width, Desc.Height);
+							if (nomatch_set.count(hash) == 0) {				// only write the image if it was not previously written
 								pTexture->UnlockRect(0);
-								ofstream nomatch(NOMATCH_LOG.string(), ofstream::out | ofstream::app);
 								ostringstream sstream;
-								sstream << (DEBUG_DIR / "nomatch\\").string() << texture_count << ".bmp";
-								D3DXSaveTextureToFile(sstream.str().c_str(), D3DXIFF_BMP, pTexture, NULL);
-								nomatch << texture_count << "," << hash_combined << "," << hash_upper << "," << hash_lower << endl;
-								nomatch.close();
+								sstream << (DEBUG_DIR / "nomatch\\").string() << hash << ".bmp";
+								if (D3DXSaveTextureToFile(sstream.str().c_str(), D3DXIFF_BMP, pTexture, NULL) == D3D_OK) {
+									nomatch_set.insert(hash);
+									ofstream nomatch(NOMATCH_LOG.string(), ofstream::out | ofstream::app);
+									nomatch << hash << "," << hash_combined << "," << hash_upper << "," << hash_lower << endl;
+									nomatch.close();
+								}
 							}
 						}
 					}

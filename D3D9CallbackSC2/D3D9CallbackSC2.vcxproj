@@ -18,6 +18,8 @@
     <ClCompile Include="src\ExtraCode.cpp" />
     <ClCompile Include="src\GlobalContext.cpp" />
     <ClCompile Include="src\Main.cpp" />
+    <ClCompile Include="src\md5.cpp" />
+    <ClCompile Include="src\stdafx.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\BigInteger.h" />
@@ -30,6 +32,9 @@
     <ClInclude Include="src\Engine.h" />
     <ClInclude Include="src\GlobalContext.h" />
     <ClInclude Include="src\Main.h" />
+    <ClInclude Include="src\md5.h" />
+    <ClInclude Include="src\stdafx.h" />
+    <ClInclude Include="src\targetver.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{AD43958D-ECCD-44B3-96A8-F524757E5ED3}</ProjectGuid>

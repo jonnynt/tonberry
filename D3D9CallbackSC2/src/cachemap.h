@@ -13,7 +13,7 @@ typedef unsigned long long uint64;
 class FieldMap
 {
 private:
-	typedef set<string> fieldset_t;								// holds field names
+	typedef set<string> fieldset_t;											// holds field names; ordered so that iterators will not be invalidateds
 	typedef fieldset_t::const_iterator fieldset_iter;						// points to field names
 
 	fieldset_t fieldset;
@@ -102,12 +102,12 @@ private:
 	typedef reverse_handlecache_t::iterator				reverse_handlecache_iter;
 
 	// together these make nhcache:
-	nhcache_list_t			nh_list;
-	nhcache_map_t			nh_map;
+	nhcache_list_t			*nh_list;
+	nhcache_map_t			*nh_map;
 
 	// handlecache:
-	handlecache_t			handlecache;
-	reverse_handlecache_t	reverse_handlecache;
+	handlecache_t			*handlecache;
+	reverse_handlecache_t	*reverse_handlecache;
 
 	size_t					entries;
 	size_t					max_size;
@@ -122,6 +122,7 @@ private:
 
 public:
 	TextureCache(unsigned);
+	~TextureCache();
 
 	/*find: determine whether a hash is in the nhcache
 	  returns: true if hash is in the nh_map, else false

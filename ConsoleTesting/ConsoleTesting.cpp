@@ -1053,15 +1053,59 @@ void Test_Texture_Replacement()
 	cv::imwrite("img_testing\\half_lower_flipped.bmp", test);
 }
 
+void Delete_Non_Unique(fs::path dir)
+{
+
+	std::unordered_set<std::string> md5s;
+	std::list<std::string> duplicates;
+
+	try {
+		fs::directory_iterator iter_end;
+		for (fs::directory_iterator texture(dir); texture != iter_end; texture++) {
+			std::string tex_name = texture->path().string();
+			cv::Mat img = cv::imread(tex_name, CV_LOAD_IMAGE_COLOR);
+			if (img.cols < 128 || img.rows < 256) continue;
+
+			// md5 left half
+			MD5 md5;
+			uchar buf[128 * 256 * 3];
+			int i = 0;
+			for (int x = 0; x < 128; x++) {
+				for (int y = 0; y < 256; y++) {
+					cv::Vec3b pixel = img.at<cv::Vec3b>(y, x);
+					buf[i++] = pixel[0];
+					buf[i++] = pixel[1];
+					buf[i++] = pixel[2];
+				}
+			}
+			md5.update(buf, 128 * 256);
+			md5.finalize();
+			std::string hash = md5.hexdigest();
+
+			// try to insert; delete duplicates
+			if (!md5s.insert(hash).second)
+				duplicates.push_back(tex_name);
+		}
+
+	} catch (fs::filesystem_error e) {
+		std::cout << e.what() << std::endl;
+	}
+
+	// delete duplicates
+	for (std::string duplicate : duplicates)
+		remove(duplicate.c_str());
+}
+
 int _tmain(int argc, _TCHAR* argv[])
 {
 	fs::path debug(FF8_ROOT + "tonberry\\debug");
 	fs::path analysis(debug / "analysis0");
 	fs::path textures = (FF8_ROOT + "\\textures");
 
+	Delete_Non_Unique(debug / "unique");
 	//Copy_Unique_Left_Half(debug, debug / "analysis0");
 	//Copy_Unique_Left_Objects(analysis, analysis / "objects");
-	//return 0;
+	return 0;
 
 	//Analyze_Pixels(analysis / "objects", debug / "object_analysis.csv");
 	//return 0;
@@ -1098,8 +1142,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				image_names.push_back(tex_name.substr(debug.string().length()));
 			}
 		}
-	}
-	catch (fs::filesystem_error e) {
+	} catch (fs::filesystem_error e) {
 		std::cout << e.what() << std::endl;
 	}
 

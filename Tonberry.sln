@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ConsoleTesting", "ConsoleTe
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D9CallbackSC2", "D3D9CallbackSC2\D3D9CallbackSC2.vcxproj", "{AD43958D-ECCD-44B3-96A8-F524757E5ED3}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Berrymapper", "Berrymapper\Berrymapper.vcxproj", "{F10D70A5-F087-4688-8F81-4F4F69F3D1C4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -27,6 +29,11 @@ Global
 		{AD43958D-ECCD-44B3-96A8-F524757E5ED3}.Release|Win32.ActiveCfg = Release|Win32
 		{AD43958D-ECCD-44B3-96A8-F524757E5ED3}.Release|Win32.Build.0 = Release|Win32
 		{AD43958D-ECCD-44B3-96A8-F524757E5ED3}.Release|x64.ActiveCfg = Release|Win32
+		{F10D70A5-F087-4688-8F81-4F4F69F3D1C4}.Debug|Win32.ActiveCfg = Debug|Win32
+		{F10D70A5-F087-4688-8F81-4F4F69F3D1C4}.Debug|x64.ActiveCfg = Debug|Win32
+		{F10D70A5-F087-4688-8F81-4F4F69F3D1C4}.Release|Win32.ActiveCfg = Release|Win32
+		{F10D70A5-F087-4688-8F81-4F4F69F3D1C4}.Release|Win32.Build.0 = Release|Win32
+		{F10D70A5-F087-4688-8F81-4F4F69F3D1C4}.Release|x64.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
