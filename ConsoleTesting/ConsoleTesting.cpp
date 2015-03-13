@@ -15,6 +15,7 @@ namespace fs = boost::filesystem;
 const static std::string FF8_ROOT = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\FINAL FANTASY VIII\\";
 const static int BLOCKSIZE = 16;
 
+typedef unsigned int uint32;
 
 typedef struct coord {
 	int x;
@@ -128,17 +129,23 @@ uint64 Old_Hash_Algorithm_1(const cv::Mat& img)
 }
 
 
-uint64 FNV_HASH_LEN = 64;
-uint64 FNV_MODULO = 1 << FNV_HASH_LEN;
-uint64 FNV_OFFSET_BASIS = 14695981039346656037;
-uint64 FNV_OFFSET_PRIME = 1099511628211;
+uint64 FNV_HASH_LEN_64 = 64;
+uint64 FNV_MODULO_64 = 1 << FNV_HASH_LEN_64;
+uint64 FNV_OFFSET_BASIS_64 = 14695981039346656037;
+uint64 FNV_OFFSET_PRIME_64 = 1099511628211;
+
+
+uint32 FNV_HASH_LEN_32 = 32;
+uint32 FNV_MODULO_32 = 1 << FNV_HASH_LEN_32;
+uint32 FNV_OFFSET_BASIS_32 = 2166136261;
+uint32 FNV_OFFSET_PRIME_32 = 16777619;
 
 //template<typename container>
 //typename boost::enable_if<boost::is_same<typename container::value_type, coord>, uint64>::type
 //FNV_Hash(const cv::Mat& img, container& coords, bool use_RGB = true)
-uint64 FNV_Hash(const cv::Mat& img, coord* coords, int len, bool use_RGB = true)
+uint64 FNV_Hash_64(const cv::Mat& img, coord* coords, int len, bool use_RGB = true)
 {
-	uint64 hash = FNV_OFFSET_BASIS;
+	uint64 hash = FNV_OFFSET_BASIS_64;
 
 	float red = 0, green = 0, blue = 0;
 	size_t coord_count = 0;
@@ -158,7 +165,7 @@ uint64 FNV_Hash(const cv::Mat& img, coord* coords, int len, bool use_RGB = true)
 		}
 
 		hash ^= val;
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 		coord_count++;
 	}
 
@@ -169,11 +176,11 @@ uint64 FNV_Hash(const cv::Mat& img, coord* coords, int len, bool use_RGB = true)
 		blue /= coord_count;
 
 		hash ^= (uchar)red;
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 		hash ^= (uchar)green;
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 		hash ^= (uchar)blue;
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 	}
 
 	return hash;
@@ -182,7 +189,7 @@ uint64 FNV_Hash(const cv::Mat& img, coord* coords, int len, bool use_RGB = true)
 
 uint64 FNV_Hash(const cv::Mat& img, std::deque<coord> coords, bool use_RGB = true)
 {
-	uint64 hash = FNV_OFFSET_BASIS;
+	uint64 hash = FNV_OFFSET_BASIS_64;
 
 	float red = 0, green = 0, blue = 0;
 	size_t coord_count = 0;
@@ -201,7 +208,7 @@ uint64 FNV_Hash(const cv::Mat& img, std::deque<coord> coords, bool use_RGB = tru
 		}
 
 		hash ^= val;
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 		coord_count++;
 	}
 
@@ -212,11 +219,11 @@ uint64 FNV_Hash(const cv::Mat& img, std::deque<coord> coords, bool use_RGB = tru
 		blue /= coord_count;
 
 		hash ^= (uchar)red;
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 		hash ^= (uchar)green;
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 		hash ^= (uchar)blue;
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 	}
 
 	return hash;
@@ -695,17 +702,17 @@ uint64 uint64pow(uint64 base, int exp)
 	return result;
 }
 
-uint64 FNV_NOLOWER_FACTOR		= uint64pow(FNV_OFFSET_PRIME, FNV_COORDS_LEN);
-uint64 FNV_NOLOWER_RGB_FACTOR	= FNV_NOLOWER_FACTOR * uint64pow(FNV_OFFSET_PRIME, 3);
-uint64 FNV_NOUPPER_BASIS		= FNV_OFFSET_BASIS * FNV_NOLOWER_FACTOR;
-uint64 FNV_NOUPPER_RGB_BASIS	= FNV_OFFSET_BASIS * FNV_NOLOWER_RGB_FACTOR;
+uint64 FNV_NOLOWER_FACTOR_64		= uint64pow(FNV_OFFSET_PRIME_64, FNV_COORDS_LEN);
+uint64 FNV_NOLOWER_RGB_FACTOR_64	= FNV_NOLOWER_FACTOR_64 * uint64pow(FNV_OFFSET_PRIME_64, 3);
+uint64 FNV_NOUPPER_BASIS_64			= FNV_OFFSET_BASIS_64 * FNV_NOLOWER_FACTOR_64;
+uint64 FNV_NOUPPER_RGB_BASIS_64		= FNV_OFFSET_BASIS_64 * FNV_NOLOWER_RGB_FACTOR_64;
 
 // hash upper, lower, and combined separately 
-uint64 FNV_Hash_Combined(cv::Mat img, uint64& hash_upper, uint64& hash_lower, const coord* coords, const int len, bool use_RGB = true)
+uint64 FNV_Hash_Combined_64(cv::Mat img, uint64& hash_upper, uint64& hash_lower, const coord* coords, const int len, bool use_RGB = true)
 {
-	hash_lower = (img.rows > VRAM_DIM / 2) ? (use_RGB) ? FNV_NOUPPER_RGB_BASIS : FNV_NOUPPER_BASIS : 0;
+	hash_lower = (img.rows > VRAM_DIM / 2) ? (use_RGB) ? FNV_NOUPPER_RGB_BASIS_64 : FNV_NOUPPER_BASIS_64 : 0;
 	
-	uint64 hash = FNV_OFFSET_BASIS;
+	uint64 hash = FNV_OFFSET_BASIS_64;
 
 	float red = 0, green = 0, blue = 0;
 	size_t coord_count = 0;
@@ -725,7 +732,7 @@ uint64 FNV_Hash_Combined(cv::Mat img, uint64& hash_upper, uint64& hash_lower, co
 		}
 
 		hash ^= val;
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 		coord_count++;
 	}
 
@@ -736,11 +743,11 @@ uint64 FNV_Hash_Combined(cv::Mat img, uint64& hash_upper, uint64& hash_lower, co
 		blue /= coord_count;
 
 		hash ^= (uchar)round(red);
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 		hash ^= (uchar)round(green);
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 		hash ^= (uchar)round(blue);
-		hash *= FNV_OFFSET_PRIME;
+		hash *= FNV_OFFSET_PRIME_64;
 	}
 
 	// set hash_upper equal to hash thus far
@@ -748,7 +755,7 @@ uint64 FNV_Hash_Combined(cv::Mat img, uint64& hash_upper, uint64& hash_lower, co
 
 	if (hash_lower) {																// make sure texture is big enough to hash lower
 		// adjust hash_upper to include lower blank object
-		hash_upper *= (use_RGB) ? FNV_NOLOWER_RGB_FACTOR : FNV_NOLOWER_FACTOR;
+		hash_upper *= (use_RGB) ? FNV_NOLOWER_RGB_FACTOR_64 : FNV_NOLOWER_FACTOR_64;
 
 		// adjust img for lower hashing
 		int half_dim = VRAM_DIM / 2;
@@ -774,10 +781,10 @@ uint64 FNV_Hash_Combined(cv::Mat img, uint64& hash_upper, uint64& hash_lower, co
 			}
 
 			hash_lower ^= val;
-			hash_lower *= FNV_OFFSET_PRIME;
+			hash_lower *= FNV_OFFSET_PRIME_64;
 
 			hash ^= val;
-			hash *= FNV_OFFSET_PRIME;
+			hash *= FNV_OFFSET_PRIME_64;
 
 			coord_count++;
 		}
@@ -789,18 +796,139 @@ uint64 FNV_Hash_Combined(cv::Mat img, uint64& hash_upper, uint64& hash_lower, co
 			blue /= coord_count;
 
 			hash_lower ^= (uchar)round(red);
-			hash_lower *= FNV_OFFSET_PRIME;
+			hash_lower *= FNV_OFFSET_PRIME_64;
 			hash_lower ^= (uchar)round(green);
-			hash_lower *= FNV_OFFSET_PRIME;
+			hash_lower *= FNV_OFFSET_PRIME_64;
 			hash_lower ^= (uchar)round(blue);
-			hash_lower *= FNV_OFFSET_PRIME;
+			hash_lower *= FNV_OFFSET_PRIME_64;
 
 			hash ^= (uchar)round(red);
-			hash *= FNV_OFFSET_PRIME;
+			hash *= FNV_OFFSET_PRIME_64;
 			hash ^= (uchar)round(green);
-			hash *= FNV_OFFSET_PRIME;
+			hash *= FNV_OFFSET_PRIME_64;
 			hash ^= (uchar)round(blue);
-			hash *= FNV_OFFSET_PRIME;
+			hash *= FNV_OFFSET_PRIME_64;
+		}
+	}
+
+	return hash;
+}
+
+uint64 uint32pow(uint32 base, int exp)
+{
+	uint64 result = 1;
+	for (int i = 0; i < exp; i++)
+		result *= base;
+
+	return result;
+}
+
+uint32 FNV_NOLOWER_FACTOR_32 = uint32pow(FNV_OFFSET_PRIME_32, FNV_COORDS_LEN);
+uint32 FNV_NOLOWER_RGB_FACTOR_32 = FNV_NOLOWER_FACTOR_32 * uint32pow(FNV_OFFSET_PRIME_32, 3);
+uint32 FNV_NOUPPER_BASIS_32 = FNV_OFFSET_BASIS_32 * FNV_NOLOWER_FACTOR_32;
+uint32 FNV_NOUPPER_RGB_BASIS_32 = FNV_OFFSET_BASIS_32 * FNV_NOLOWER_RGB_FACTOR_32;
+
+// hash upper, lower, and combined separately 
+uint32 FNV_Hash_Combined_32(cv::Mat img, uint32& hash_upper, uint32& hash_lower, const coord* coords, const int len, bool use_RGB = true)
+{
+	hash_lower = (img.rows > VRAM_DIM / 2) ? (use_RGB) ? FNV_NOUPPER_RGB_BASIS_32 : FNV_NOUPPER_BASIS_32 : 0;
+
+	uint32 hash = FNV_OFFSET_BASIS_32;
+
+	float red = 0, green = 0, blue = 0;
+	size_t coord_count = 0;
+	for (int i = 0; i < len; i++) {
+		coord point = coords[i];
+		unsigned char val = 0;
+		if (point.x < img.cols && point.y < img.rows) {
+			cv::Vec3b pixel = img.at<cv::Vec3b>(point.y, point.x);
+			val = round((pixel[0] + pixel[1] + pixel[2]) / 3);
+
+			// keep track of RGB sums of pixels
+			if (use_RGB) {
+				red += pixel[0];
+				green += pixel[1];
+				blue += pixel[2];
+			}
+		}
+
+		hash ^= val;
+		hash *= FNV_OFFSET_PRIME_32;
+		coord_count++;
+	}
+
+	// factor RGB averages into hash
+	if (use_RGB) {
+		red /= coord_count;
+		green /= coord_count;
+		blue /= coord_count;
+
+		hash ^= (uchar)round(red);
+		hash *= FNV_OFFSET_PRIME_32;
+		hash ^= (uchar)round(green);
+		hash *= FNV_OFFSET_PRIME_32;
+		hash ^= (uchar)round(blue);
+		hash *= FNV_OFFSET_PRIME_32;
+	}
+
+	// set hash_upper equal to hash thus far
+	hash_upper = hash;
+
+	if (hash_lower) {																// make sure texture is big enough to hash lower
+		// adjust hash_upper to include lower blank object
+		hash_upper *= (use_RGB) ? FNV_NOLOWER_RGB_FACTOR_32 : FNV_NOLOWER_FACTOR_32;
+
+		// adjust img for lower hashing
+		int half_dim = VRAM_DIM / 2;
+		int last_obj_start = img.rows - half_dim;
+		cv::Mat limg = img.rowRange(std::min(last_obj_start, half_dim), img.rows);	// point limg at last place where a full 128x128 object could be hashed but limit it to object directly under upper
+
+		// hash lower and continue hashing combined
+		red = 0, green = 0, blue = 0;
+		coord_count = 0;
+		for (int i = 0; i < len; i++) {
+			coord point = coords[i];
+			unsigned char val = 0;
+			if (point.x < limg.cols && point.y < limg.rows) {
+				cv::Vec3b pixel = limg.at<cv::Vec3b>(point.y, point.x);
+				val = round((pixel[0] + pixel[1] + pixel[2]) / 3);
+
+				// keep track of RGB sums of pixels
+				if (use_RGB) {
+					red += pixel[0];
+					green += pixel[1];
+					blue += pixel[2];
+				}
+			}
+
+			hash_lower ^= val;
+			hash_lower *= FNV_OFFSET_PRIME_32;
+
+			hash ^= val;
+			hash *= FNV_OFFSET_PRIME_32;
+
+			coord_count++;
+		}
+
+		// factor RGB averages into hash
+		if (use_RGB) {
+			red /= coord_count;
+			green /= coord_count;
+			blue /= coord_count;
+
+			hash_lower ^= (uchar)round(red);
+			hash_lower *= FNV_OFFSET_PRIME_32;
+			hash_lower ^= (uchar)round(green);
+			hash_lower *= FNV_OFFSET_PRIME_32;
+			hash_lower ^= (uchar)round(blue);
+			hash_lower *= FNV_OFFSET_PRIME_32;
+
+			hash ^= (uchar)round(red);
+			hash *= FNV_OFFSET_PRIME_32;
+			hash ^= (uchar)round(green);
+			hash *= FNV_OFFSET_PRIME_32;
+			hash ^= (uchar)round(blue);
+			hash *= FNV_OFFSET_PRIME_32;
 		}
 	}
 
@@ -826,7 +954,7 @@ void Create_Hashmap(fs::path texture_dir, fs::path output_dir, bool append = fal
 		} else if (fs::is_regular_file(path) && boost::iequals(path.extension().string(), ".bmp")) {
 			cv::Mat img = cv::imread(path.string(), CV_LOAD_IMAGE_COLOR);
 			uint64 hash_combined, hash_upper, hash_lower;
-			hash_combined = FNV_Hash_Combined(img, hash_upper, hash_lower, low_mode_block128, FNV_COORDS_LEN, true);
+			hash_combined = FNV_Hash_Combined_64(img, hash_upper, hash_lower, low_mode_block128, FNV_COORDS_LEN, true);
 			out << path.stem().string() << "," << hash_combined << "," << hash_upper << "," << hash_lower << std::endl;
 		}
 	}
@@ -857,8 +985,8 @@ void Get_Blank_Hashes()
 	uint64 upper_rgb, lower_rgb, combined_rgb;
 
 	std::cout << "NORMAL:" << std::endl;
-	combined = FNV_Hash_Combined(normal, upper, lower, low_mode_block128, FNV_COORDS_LEN, false);
-	combined_rgb = FNV_Hash_Combined(normal, upper_rgb, lower_rgb, low_mode_block128, FNV_COORDS_LEN, true);
+	combined = FNV_Hash_Combined_64(normal, upper, lower, low_mode_block128, FNV_COORDS_LEN, false);
+	combined_rgb = FNV_Hash_Combined_64(normal, upper_rgb, lower_rgb, low_mode_block128, FNV_COORDS_LEN, true);
 
 	std::cout << "  upper:        " << upper << std::endl;
 	std::cout << "  upper_rgb:    " << upper_rgb  << std::endl << std::endl;
@@ -870,15 +998,15 @@ void Get_Blank_Hashes()
 	std::cout << "  combined_rgb: " << combined_rgb << std::endl << std::endl;
 
 	std::cout << "NO LOWER:" << std::endl;
-	combined = FNV_Hash_Combined(nolower, upper, lower, low_mode_block128, FNV_COORDS_LEN, false);
-	combined_rgb = FNV_Hash_Combined(nolower, upper_rgb, lower_rgb, low_mode_block128, FNV_COORDS_LEN, true);
+	combined = FNV_Hash_Combined_64(nolower, upper, lower, low_mode_block128, FNV_COORDS_LEN, false);
+	combined_rgb = FNV_Hash_Combined_64(nolower, upper_rgb, lower_rgb, low_mode_block128, FNV_COORDS_LEN, true);
 
 	std::cout << "  combined:     " << combined << std::endl;
 	std::cout << "  combined_rgb: " << combined_rgb << std::endl << std::endl;
 
 	std::cout << "NO UPPER:" << std::endl;
-	combined = FNV_Hash_Combined(noupper, upper, lower, low_mode_block128, FNV_COORDS_LEN, false);
-	combined_rgb = FNV_Hash_Combined(noupper, upper_rgb, lower_rgb, low_mode_block128, FNV_COORDS_LEN, true);
+	combined = FNV_Hash_Combined_64(noupper, upper, lower, low_mode_block128, FNV_COORDS_LEN, false);
+	combined_rgb = FNV_Hash_Combined_64(noupper, upper_rgb, lower_rgb, low_mode_block128, FNV_COORDS_LEN, true);
 
 	std::cout << "  combined:     " << combined << std::endl;
 	std::cout << "  combined_rgb: " << combined_rgb << std::endl << std::endl;
@@ -1102,10 +1230,10 @@ int _tmain(int argc, _TCHAR* argv[])
 	fs::path analysis(debug / "analysis0");
 	fs::path textures = (FF8_ROOT + "\\textures");
 
-	Delete_Non_Unique(debug / "unique");
+	//Delete_Non_Unique(debug / "unique");
 	//Copy_Unique_Left_Half(debug, debug / "analysis0");
 	//Copy_Unique_Left_Objects(analysis, analysis / "objects");
-	return 0;
+	//return 0;
 
 	//Analyze_Pixels(analysis / "objects", debug / "object_analysis.csv");
 	//return 0;
@@ -1157,7 +1285,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	for (int i = 0; i < images.size(); i++) {
 		cv::Mat img = images[i];
 		//uint64 hash = Old_Hash_Algorithm_1(img);
-		uint64 hash = FNV_Hash(img, high_var_block128_collision44, 297);
+		uint64 hash = FNV_Hash_64(img, high_var_block128_collision44, 297);
 		hashmap[hash].insert(image_names[i]);
 	}
 
@@ -1227,7 +1355,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	for (int i = 0; i < images.size(); i++) {
 		cv::Mat img = images[i];
 		start_time = clock();
-		uint64 hash = FNV_Hash(img, hash1, 64, false);
+		uint64 hash = FNV_Hash_64(img, hash1, 64, false);
 		end_time = clock();
 		total_time += end_time - start_time;
 		hashmap[hash].insert(image_names[i]);
@@ -1248,7 +1376,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	for (int i = 0; i < images.size(); i++) {
 		cv::Mat img = images[i];
 		start_time = clock();
-		uint64 hash = FNV_Hash(img, high_var_block128_collision44, 253, false);
+		uint64 hash = FNV_Hash_64(img, high_var_block128_collision44, 253, false);
 		end_time = clock();
 		total_time += end_time - start_time;
 		hashmap[hash].insert(image_names[i]);
@@ -1269,7 +1397,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	for (int i = 0; i < images.size(); i++) {
 		cv::Mat img = images[i];
 		start_time = clock();
-		uint64 hash = FNV_Hash(img, high_var_block128_collision44, 297);
+		uint64 hash = FNV_Hash_64(img, high_var_block128_collision44, 297);
 		end_time = clock();
 		total_time += end_time - start_time;
 		hashmap[hash].insert(image_names[i]);

@@ -122,17 +122,18 @@ HANDLE TextureCache::at(uint64 hash)
 
 HANDLE TextureCache::at(HANDLE replaced)
 {
+	ofstream debug(debug_file, ofstream::out | ofstream::app);
+
 	handlecache_iter cache_iter = handlecache->find(replaced);
 	if (cache_iter == handlecache->end()) return NULL;
 
 	nhcache_map_iter map_iter = nh_map->find(cache_iter->second);
-	if (map_iter == nh_map->end()) {															// this should never happen, but appears to always occur once
-		ofstream debug(debug_file, ofstream::out | ofstream::app);							// at the very beginning of running the game; I'm not sure why...
+	if (map_iter == nh_map->end()) {															// this should never happen
 		debug << endl << "ERROR: handlecache entry (" << cache_iter->first << ", " << cache_iter->second << ") not in nh_map!" << endl;
-		debug.close();
 		return NULL;
 	}
 
+	debug.close();
 	return map_iter->second->second;
 }
 
@@ -142,7 +143,7 @@ void TextureCache::map_insert(uint64 hash, nhcache_list_iter item, HANDLE replac
 	ofstream debug(debug_file, ofstream::out | ofstream::app);
 
 	// update nh_map with new list item pointer
-	pair<nhcache_map_iter, bool> map_insertion = nh_map->insert(								// returns iterator to nh_map[hash] and boolean success
+	pair<nhcache_map_iter, bool> map_insertion = nh_map->insert(							// returns iterator to nh_map[hash] and boolean success
 		pair<uint64, nhcache_list_iter>(hash, item));
 	if (!map_insertion.second)																// if nh_map already contained hash, 
 		map_insertion.first->second = nh_list->begin();										// change nh_map[hash] to nh_list->begin()
@@ -184,8 +185,8 @@ void TextureCache::map_insert(uint64 hash, nhcache_list_iter item, HANDLE replac
 	reverse_handlecache_iter backpointer = reverse_handlecache->begin();// backpointer_range.first;
 	for (; /*backpointer != backpointer_range.second &&*/ backpointer != reverse_handlecache->end(); backpointer++)
 		debug << "\t\t\t\t\t\t\t\t(" << backpointer->first << ", " << backpointer->second << ")" << endl;
-	debug << endl;
 
+	debug << endl;
 	debug.close();
 }
 
@@ -222,11 +223,11 @@ void TextureCache::insert(HANDLE replaced, uint64 hash, HANDLE replacement)
 	debug << "(" << nh_list->begin()->first << ", " << nh_list->begin()->second << ")" << endl;
 
 	/* MAKE SURE NHCACHE IS THE CORRECT SIZE */
-	while (nh_list->size() > max_size) {														// "while" for completeness but this should only ever loop once
+	while (nh_list->size() > max_size) {													// "while" for completeness but this should only ever loop once
 		// get pointer to last (least recent) list item
 		nhcache_list_iter last_elem = nh_list->end();
 		--last_elem;
-		debug << "\tRemoving (" << last_elem->first << ", " << last_elem->second << ") from back of nh_list->" << endl;
+		debug << "\tRemoving (" << last_elem->first << ", " << last_elem->second << ") from back of nh_list." << endl;
 
 		// dispose of texture
 		((IDirect3DTexture9*)last_elem->second)->Release();
@@ -239,15 +240,15 @@ void TextureCache::insert(HANDLE replaced, uint64 hash, HANDLE replacement)
 
 		reverse_handlecache_iter backpointer = backpointer_range.first;
 		for (;  backpointer != backpointer_range.second && backpointer != reverse_handlecache->end(); backpointer++) {
-			debug << "\t\tRemoving (" << backpointer->second << ", " << backpointer->first << ") from handlecache->" << endl;
-			handlecache->erase(backpointer->second);											// remove from handlecache; reverse_handlecache will be removed
+			debug << "\t\tRemoving (" << backpointer->second << ", " << backpointer->first << ") from handlecache." << endl;
+			handlecache->erase(backpointer->second);										// remove from handlecache; reverse_handlecache will be removed
 		}																					// afterward to preserve iterators in the backpointer_range
 		int size_before = reverse_handlecache->size();
 		int num_removed = reverse_handlecache->erase(last_elem->first);
 		debug << "\t\tRemoved " << num_removed << " entries from reverse_handlecache-> (size: " << size_before << " --> " << reverse_handlecache->size() << ")" << endl;
 
 		// remove from map (this is why the nh_list stores pair<hash, handle>)
-		debug << "\tRemoving (" << to_delete->first << ", (" << to_delete->second->first << ", " << to_delete->second->second << ")) from nh_map->" << endl;
+		debug << "\tRemoving (" << to_delete->first << ", (" << to_delete->second->first << ", " << to_delete->second->second << ")) from nh_map." << endl;
 		nh_map->erase(to_delete);
 
 		// pop from list
@@ -263,7 +264,23 @@ void TextureCache::erase(HANDLE replaced)
 {
 	handlecache_iter iter;
 	if ((iter = handlecache->find(replaced)) != handlecache->end()) {
-		reverse_handlecache->erase(iter->second);											// any old cache entries should be removed from both maps
-		handlecache->erase(iter);
+		ofstream debug(debug_file, ofstream::out | ofstream::app);
+		debug << "Erasing unused HANDLE " << replaced << ": " << endl;
+		debug << "\tRemoving (" << iter->first << ", " << iter->second << ") from handlecache." << endl;
+
+		pair<reverse_handlecache_iter, reverse_handlecache_iter> backpointer_range = reverse_handlecache->equal_range(iter->second);
+		reverse_handlecache_iter backpointer = backpointer_range.first;
+		for (; backpointer != backpointer_range.second && backpointer != reverse_handlecache->end(); backpointer++)
+			if (backpointer->second == replaced) {
+				int size_before = reverse_handlecache->size();
+				debug << "\tRemoving (" << backpointer->first << ", " << backpointer->second << ") from reverse_handlecache-> ";
+				reverse_handlecache->erase(backpointer);									// remove matching backpointer from reverse_handlecache
+				debug << "(size: " << size_before << " --> " << reverse_handlecache->size() << ")" << endl;
+				break;
+			}
+
+		handlecache->erase(iter);															// remove entry from handlecache
+		debug << endl;
+		debug.close();
 	}
 }
