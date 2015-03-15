@@ -702,7 +702,7 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 					} else {													// NO MATCH
 						if (Desc.Width > 0 && Desc.Height > 0) {
 							uint64 hash = FNV_Hash_Full(pData, pitch, Desc.Width, Desc.Height);
-							if (nomatch_set.count(hash) == 0) {				// only write the image if it was not previously written
+							if (nomatch_set.count(hash) == 0) {					// only write the image if it was not previously written
 								pTexture->UnlockRect(0);
 								ostringstream sstream;
 								sstream << (DEBUG_DIR / "nomatch\\").string() << hash << ".bmp";

@@ -204,8 +204,8 @@ void TextureCache::insert(HANDLE replaced, uint64 hash)
 
 	debug << "\tMoving (" << item->first << ", " << item->second << ") to front of nh_list: nh_list->begin() = ";
 	// move (most-recently-accessed) list item to front of nh_list
-	nh_list->erase(item);
 	nh_list->push_front(*item);
+	nh_list->erase(item);
 	debug << "(" << nh_list->begin()->first << ", " << nh_list->begin()->second << ")" << endl;
 
 	debug.close();
