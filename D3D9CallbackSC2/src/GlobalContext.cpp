@@ -1,10 +1,10 @@
 #include "Main.h"
 #include "cachemap.h"
-#include "md5.h"
 #include <stdint.h>
 #include <sstream>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <chrono>
 namespace fs = boost::filesystem;
 
 #ifndef ULTRA_FAST
@@ -48,7 +48,8 @@ int texture_count = 0;													// keep track of the number of textures proce
 
 TextureCache* cache;
 FieldMap* fieldmap;
-unordered_set<uint64_t> nomatch_set;
+unordered_set<uint64_t> nomatch_left;
+unordered_set<uint64_t> nomatch_right;
 
 
 
@@ -142,7 +143,7 @@ void load_prefs()
 			if (boost::iequals(param, "RESIZE_FACTOR"))		// ignore case
 				RESIZE_FACTOR = ToNumber<float>(value);
 			else if (boost::iequals(param, "debug_mode"))	// ignore case
-				DEBUG = (boost::iequals(param, "yes"));		// ignore case
+				DEBUG = (boost::iequals(value, "yes"));		// ignore case
 			else if (boost::iequals(param, "cache_size"))	// ignore case
 				CACHE_SIZE = ToNumber<unsigned>(value);
 		}
@@ -231,6 +232,7 @@ void GlobalContext::Init()
 	Graphics.Init();
 	load_prefs();
 	debug << "prefs.txt loaded." << endl;
+	if (DEBUG) debug << "Debug mode enabled." << endl;
 
 	cache = new TextureCache(CACHE_SIZE);
 	fieldmap = new FieldMap();
@@ -291,7 +293,7 @@ uint64_t FNV_Hash(BYTE* pData, UINT pitch, int width, int height, const coord* c
 	return hash;
 }
 
-uint64_t FNV_Hash_Full(BYTE* pData, UINT pitch, int width, int height)
+uint64_t FNV_Hash_Full(BYTE* pData, UINT pitch, int width, int height, int start_x = 0)
 {
 	uint64_t hash = FNV_OFFSET_BASIS;
 
@@ -299,7 +301,7 @@ uint64_t FNV_Hash_Full(BYTE* pData, UINT pitch, int width, int height)
 	size_t coord_count = 0;
 	for (int y = 0; y < height; y++) {
 		RGBColor* CurRow = (RGBColor*)(pData + y * pitch);
-		for (int x = 0; x < width; x++) {
+		for (int x = start_x; x < width; x++) {
 			RGBColor Color = CurRow[x];
 			hash ^= Color.r;
 			hash *= FNV_OFFSET_PRIME;
@@ -553,8 +555,8 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 			} else {																		// use upscaled pixels from replaced pData
 				for (UINT x = 0; x < replacement_width; x++) {
 					//debug << " " << x;
-					RGBColor* CurRow = (RGBColor*)(replaced_pData + (replaced_height - 1 - y / 4) * replaced_pitch);
-					Color = CurRow[(int)(x / RESIZE_FACTOR)];
+					RGBColor* OldRow = (RGBColor*)(replaced_pData + (replaced_height - 1 - y / 4) * replaced_pitch);
+					Color = OldRow[(int)(x / RESIZE_FACTOR)];
 					CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
 				}
 			}
@@ -572,8 +574,8 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 			} else {																		// use upscaled pixels from replaced pData
 				for (UINT x = 0; x < replacement_width; x++) {
 					//debug << " " << x;
-					RGBColor* CurRow = (RGBColor*)(replaced_pData + (replaced_height - 1 - y / 4) * replaced_pitch);
-					Color = CurRow[(int)(x / RESIZE_FACTOR)];
+					RGBColor* OldRow = (RGBColor*)(replaced_pData + (replaced_height - 1 - y / 4) * replaced_pitch);
+					Color = OldRow[(int)(x / RESIZE_FACTOR)];
 					CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
 				}
 			}
@@ -584,28 +586,6 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 	debug << "Texture loaded successfully." << endl;
 	debug.close();
 	return(HANDLE)newtexture;
-}
-
-string md5(BYTE* pData, UINT width, UINT height, UINT pitch)
-{
-	MD5 md5;
-	UINT hash_width = width;// min(width, VRAM_DIM / 2);
-	uchar* buf = new uchar[hash_width * height * 3];
-	int i = 0;
-	for (int y = 0; y < height; y++) {
-		for (int x = 0; x < hash_width; x++) {
-			RGBColor* CurRow = (RGBColor*)(pData + y * pitch);
-			RGBColor Color = CurRow[x];
-			buf[i++] = Color.r;
-			buf[i++] = Color.g;
-			buf[i++] = Color.b;
-		}
-	}
-	md5.update(buf, 128 * 256);
-	md5.finalize();
-	std::string hash = md5.hexdigest();
-	delete[] buf;
-	return hash;
 }
 
 
@@ -703,17 +683,98 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 						} else
 							debug << "failed..." << endl;;
 					} else {													// NO MATCH
-						if (Desc.Width > 0 && Desc.Height > 0) {
-							uint64_t hash = FNV_Hash_Full(pData, pitch, Desc.Width, Desc.Height);
-							if (nomatch_set.count(hash) == 0) {					// only write the image if it was not previously written
-								pTexture->UnlockRect(0);
-								ostringstream sstream;
-								sstream << (DEBUG_DIR / "nomatch\\").string() << hash << ".bmp";
-								if (D3DXSaveTextureToFile(sstream.str().c_str(), D3DXIFF_BMP, pTexture, NULL) == D3D_OK) {
-									nomatch_set.insert(hash);
+						if (DEBUG && Desc.Width > 0 && Desc.Height > 0) {
+
+							long long time = chrono::duration_cast<chrono::milliseconds>(chrono::high_resolution_clock::now().time_since_epoch()).count();
+							ostringstream sstream;
+							if (Desc.Width <= VRAM_DIM / 2) {					// save the whole image
+								uint64_t hash = FNV_Hash_Full(pData, pitch, Desc.Width, Desc.Height);
+								if (nomatch_left.count(hash) == 0) {
+									sstream << (DEBUG_DIR / "nomatch\\").string() << hash << ".bmp";
+									pTexture->UnlockRect(0);
+									if (D3DXSaveTextureToFile(sstream.str().c_str(), D3DXIFF_BMP, pTexture, NULL) == D3D_OK) {
+										nomatch_left.insert(hash);
+										ofstream nomatch(NOMATCH_LOG.string(), ofstream::out | ofstream::app);
+										nomatch << time << "," << hash << "," << hash_combined << "," << hash_upper << "," << hash_lower << endl;
+										nomatch.close();
+									}
+								} else {
 									ofstream nomatch(NOMATCH_LOG.string(), ofstream::out | ofstream::app);
-									nomatch << hash << "," << hash_combined << "," << hash_upper << "," << hash_lower << endl;
+									nomatch << time << "," << "SKIPPED" << hash << endl;
 									nomatch.close();
+								}
+							} else {
+								uint16_t save_option = 0;						// 0: save nothing; 1: save left-half only; 2: save whole image
+								uint64_t hash_left = FNV_Hash_Full(pData, pitch, VRAM_DIM / 2, Desc.Height);
+								uint64_t hash_right = FNV_Hash_Full(pData, pitch, Desc.Width, Desc.Height, VRAM_DIM / 2);
+
+								if (nomatch_left.count(hash_left) == 0)			// If we've never seen this left-half before:
+									if (nomatch_left.count(hash_right) == 0)	//   If we've never seen this right-half on the left-half of an image: save the whole image
+										save_option = 2;
+									else										//   If we have seen this right-half on the left-half of an image: save only the left half
+										save_option = 1;
+
+								if (save_option < 2 &&
+									nomatch_left.count(hash_right) == 0 &&		// If we've never seen this right-half on either side of the image: save the whole image
+									nomatch_right.count(hash_right) == 0)
+									save_option = 2;
+
+								switch (save_option) {
+								case 2:											// save the whole image
+								{
+									pTexture->UnlockRect(0);
+									sstream << (DEBUG_DIR / "nomatch\\").string() << hash_left << "_" << hash_right << ".bmp";
+									if (D3DXSaveTextureToFile(sstream.str().c_str(), D3DXIFF_BMP, pTexture, NULL) == D3D_OK) {
+										nomatch_left.insert(hash_left);			// only insert if texture save was successful, so that \nomatch\ can be disabled by appending 0
+										nomatch_right.insert(hash_right);
+										ofstream nomatch(NOMATCH_LOG.string(), ofstream::out | ofstream::app);
+										nomatch << time << "," << hash_left << "_" << hash_right << "," << hash_combined << "," << hash_upper << "," << hash_lower << endl;
+										nomatch.close();
+									}
+									break;
+								}
+								case 1:											// save the left-half of the image
+								{
+									// create new texture
+									LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
+									IDirect3DTexture9* half_texture;
+									Device->CreateTexture(Desc.Width / 2, Desc.Height, 0, D3DUSAGE_AUTOGENMIPMAP, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &half_texture, NULL);
+
+									// copy left half to texture to half_texture
+									D3DLOCKED_RECT newRect;
+									half_texture->LockRect(0, &newRect, NULL, 0);
+									BYTE* newData = (BYTE *)newRect.pBits;
+									for (UINT y = 0; y < Desc.Height; y++) {
+										RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
+										for (UINT x = 0; x < Desc.Width / 2; x++) {
+											RGBColor* OldRow = (RGBColor*)(pData + y * pitch);
+											RGBColor Color = OldRow[x];
+											CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+										}
+									}
+
+									// save half_texture
+									half_texture->UnlockRect(0);
+									sstream << (DEBUG_DIR / "nomatch\\").string() << hash_left << "_" << ".bmp";
+									if (D3DXSaveTextureToFile(sstream.str().c_str(), D3DXIFF_BMP, half_texture, NULL) == D3D_OK) {
+										nomatch_left.insert(hash_left);			// only insert if texture save was successful, so that \nomatch\ can be disabled by appending 0
+										nomatch_right.insert(hash_right);
+										ofstream nomatch(NOMATCH_LOG.string(), ofstream::out | ofstream::app);
+										nomatch << time << "," << hash_left << "_" << "," << hash_combined << "," << hash_upper << "," << hash_lower << endl;
+										nomatch.close();
+									}
+
+									// release half_texture
+									half_texture->Release();
+									break;
+								}
+								case 0:
+								{
+									ofstream nomatch(NOMATCH_LOG.string(), ofstream::out | ofstream::app);
+									nomatch << time << "," << "SKIPPED" << hash_left << hash_right << endl;
+									nomatch.close();
+									break;
+								}
 								}
 							}
 						}

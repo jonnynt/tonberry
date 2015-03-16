@@ -3,6 +3,10 @@
 
 #define DEBUG 0
 
+#if DEBUG
+string debug_file = "tonberry\\debug\\texture_cache.log";
+#endif
+
 size_t FieldMap::count(uint64_t hash)
 {
 	fieldmap_iter iter = fieldmap.find(hash);
@@ -73,9 +77,6 @@ void FieldMap::writeMap(ofstream& out)
 		out << endl;
 	}
 }
-#if DEBUG
-string debug_file = "tonberry\\debug\\texture_cache.log";
-#endif
 
 TextureCache::TextureCache(unsigned max_size)
 {
