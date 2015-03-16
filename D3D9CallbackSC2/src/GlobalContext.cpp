@@ -32,16 +32,6 @@ double GetCounter()
     return double(li.QuadPart-CounterStart)/PCFreq;
 }
 #endif
-/*********************************
-*								 *
-*$(SolutionDir)$(Configuration)\ *
-*								 *
-*********************************/
-//-------------
-/*#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>*/
-//-------------
 
 #ifndef ULTRA_FAST
 bool g_ReportingEvents = false;
@@ -676,7 +666,7 @@ bool GlobalContext::SetTexture(DWORD Stage, HANDLE* SurfaceHandles, UINT Surface
                if (SurfaceHandles[j] && (newtexture = (IDirect3DTexture9*)texcache->at(SurfaceHandles[j]))) {
 				  
                        g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
-                   //texcache->fastupdate(SurfaceHandles[j]);
+					//texcache->fastupdate(SurfaceHandles[j]);
 					   //((IDirect3DTexture9*)SurfaceHandles[j])->Release();
 #if DEBUG
   debug << GetCounter() << endl;

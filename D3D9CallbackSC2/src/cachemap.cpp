@@ -69,6 +69,7 @@ HANDLE TextureCache::at(HANDLE replaced)
 		return NULL;
 	}
 
+	fastupdate(map_iter);
 	return map_iter->second->second;
 }
 
@@ -136,12 +137,8 @@ void TextureCache::map_insert(uint64_t hash, nhcache_list_iter item, HANDLE repl
 #endif
 }
 
-void TextureCache::fastupdate(HANDLE replaced){
-	uint64_t hash = handlecache->find(replaced)->second;
-	//no need to check if it exists... it obviously does
-	nhcache_map_iter updated = nh_map->find(hash);	// this line is now needed, we want to check if we update or not 
-	if (updated == nh_map->end()) return;	//not actually needed, but will keep it, just in case ;)
-
+void TextureCache::fastupdate(nhcache_map_iter updated)
+{
 	/* UPDATE NH CACHE ACCESS ORDER */
 	nhcache_list_iter item = updated->second;
 

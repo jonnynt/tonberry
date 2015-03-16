@@ -68,7 +68,7 @@ public:
 	/*fastupdate: inserts replaced :-> hash into the handlecache cache.
 		PRECONDITION: nh_map[hash] exists.
 	*/
-	void fastupdate(HANDLE replaced);
+	void fastupdate(nhcache_map_iter updated);
 
 	/*update: if nh_map[hash] exists, inserts replaced :-> hash into the handlecache cache.
 	  returns: true if nh_map[hash] exist, false if it doesn't
