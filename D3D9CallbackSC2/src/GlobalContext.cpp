@@ -28,13 +28,29 @@ typedef struct coord
 } coord;
 
 template <typename T>
-T ToNumber(const std::string& Str)	//convert string to unsigned long long -> uint64
+T ToNumber(const std::string& Str)	//convert string to uint64_t
 {
 	T Number;
 	std::stringstream S(Str);
 	S >> Number;
 	return Number;
 }
+
+/**********************************
+*
+*	Global Variables
+*
+**********************************/
+
+const int VRAM_DIM = 256;
+
+int texture_count = 0;													// keep track of the number of textures processed
+
+TextureCache* cache;
+FieldMap* fieldmap;
+unordered_set<uint64_t> nomatch_set;
+
+
 
 //
 // PATHS
@@ -50,49 +66,36 @@ fs::path NOMATCH_LOG(DEBUG_DIR / "nomatch.log");
 fs::path COLLISIONS_CSV(TONBERRY_DIR / "collisions.csv");
 fs::path HASHMAP2_CSV(TONBERRY_DIR / "hash2map.csv");
 fs::path OBJECTS_CSV(TONBERRY_DIR / "objmap.csv");
-// coordinates based on variance and frequently-colliding pixels 
-// used with FNV-1a Hash Algorithm
 
 
-/**********************************
-*
-*	Global Variables
-*
-**********************************/
-
-const int VRAM_DIM = 256;
-
-int texture_count = 0;													// keep track of the number of textures processed
-
-TextureCache* cache;
-FieldMap* fieldmap;
-unordered_set<uint64> nomatch_set;
 
 //
 // FNV HASH CONSTANTS
 //
 
-const uint64 FNV_HASH_LEN		= 64;						// length of FNV hash in bits
-const uint64 FNV_MODULO			= 1 << FNV_HASH_LEN;		// implicit: since uint64 is 64-bits, overflow is equivalent to modulo
-const uint64 FNV_OFFSET_BASIS	= 14695981039346656037;		// starting value of FNV hash
-const uint64 FNV_OFFSET_PRIME	= 1099511628211;
+const uint64_t FNV_HASH_LEN		= 64;						// length of FNV hash in bits
+const uint64_t FNV_MODULO			= 1 << FNV_HASH_LEN;	// implicit: since uint64_t is 64-bits, overflow is equivalent to modulo
+const uint64_t FNV_OFFSET_BASIS	= 14695981039346656037;		// starting value of FNV hash
+const uint64_t FNV_OFFSET_PRIME	= 1099511628211;
 
+// coordinates based on variance and frequently-colliding pixels 
+// used with FNV-1a Hash Algorithm
 const int FNV_COORDS_LEN = 121;
 const coord FNV_COORDS[FNV_COORDS_LEN] = { coord{ 11, 9 }, coord{ 22, 7 }, coord{ 28, 7 }, coord{ 39, 9 }, coord{ 53, 9 }, coord{ 60, 7 }, coord{ 76, 11 }, coord{ 88, 8 }, coord{ 91, 11 }, coord{ 102, 7 }, coord{ 115, 9 }, coord{ 11, 15 }, coord{ 22, 19 }, coord{ 28, 20 }, coord{ 40, 22 }, coord{ 54, 16 }, coord{ 60, 17 }, coord{ 76, 17 }, coord{ 87, 20 }, coord{ 91, 20 }, coord{ 107, 20 }, coord{ 115, 13 }, coord{ 11, 24 }, coord{ 22, 29 }, coord{ 28, 30 }, coord{ 39, 29 }, coord{ 46, 30 }, coord{ 60, 30 }, coord{ 70, 30 }, coord{ 87, 25 }, coord{ 93, 25 }, coord{ 102, 27 }, coord{ 115, 33 }, coord{ 11, 38 }, coord{ 22, 39 }, coord{ 28, 44 }, coord{ 39, 41 }, coord{ 55, 35 }, coord{ 60, 38 }, coord{ 70, 40 }, coord{ 87, 37 }, coord{ 99, 44 }, coord{ 102, 43 }, coord{ 115, 35 }, coord{ 11, 50 }, coord{ 21, 46 }, coord{ 25, 51 }, coord{ 40, 48 }, coord{ 46, 46 }, coord{ 60, 46 }, coord{ 76, 47 }, coord{ 87, 47 }, coord{ 93, 49 }, coord{ 107, 53 }, coord{ 115, 49 }, coord{ 11, 61 }, coord{ 22, 59 }, coord{ 25, 59 }, coord{ 40, 59 }, coord{ 55, 57 }, coord{ 60, 61 }, coord{ 70, 58 }, coord{ 87, 59 }, coord{ 99, 58 }, coord{ 102, 59 }, coord{ 115, 57 }, coord{ 7, 77 }, coord{ 21, 77 }, coord{ 24, 71 }, coord{ 36, 77 }, coord{ 46, 76 }, coord{ 60, 77 }, coord{ 70, 70 }, coord{ 87, 71 }, coord{ 93, 77 }, coord{ 102, 69 }, coord{ 115, 77 }, coord{ 11, 84 }, coord{ 21, 80 }, coord{ 27, 85 }, coord{ 39, 79 }, coord{ 55, 85 }, coord{ 60, 81 }, coord{ 75, 86 }, coord{ 82, 84 }, coord{ 93, 84 }, coord{ 107, 79 }, coord{ 115, 79 }, coord{ 11, 92 }, coord{ 22, 97 }, coord{ 28, 90 }, coord{ 40, 93 }, coord{ 46, 92 }, coord{ 60, 91 }, coord{ 76, 97 }, coord{ 82, 98 }, coord{ 93, 90 }, coord{ 102, 99 }, coord{ 115, 99 }, coord{ 6, 107 }, coord{ 22, 101 }, coord{ 31, 102 }, coord{ 41, 108 }, coord{ 55, 107 }, coord{ 60, 107 }, coord{ 70, 104 }, coord{ 87, 101 }, coord{ 93, 105 }, coord{ 102, 101 }, coord{ 115, 109 }, coord{ 11, 112 }, coord{ 21, 112 }, coord{ 27, 113 }, coord{ 41, 112 }, coord{ 55, 113 }, coord{ 60, 120 }, coord{ 70, 116 }, coord{ 82, 112 }, coord{ 93, 113 }, coord{ 107, 117 }, coord{ 115, 113 } };
 
-uint64 uint64pow(uint64 base, int exp)						// calculate base^exp modulo UINT64_MAX
+uint64_t uint64_tpow(uint64_t base, int exp)				// calculate base^exp modulo uint64_t_MAX
 {
-	uint64 result = 1;
+	uint64_t result = 1;
 	for (int i = 0; i < exp; i++)
 		result *= base;
 
 	return result;
 }
 
-uint64 FNV_NOLOWER_FACTOR		= uint64pow(FNV_OFFSET_PRIME, FNV_COORDS_LEN);			// multiplying an upper 128x128 object hash by this factor is equivalent to hashing a 128x256 object pair where the lower object is all (0,0,0)
-uint64 FNV_NOLOWER_RGB_FACTOR	= FNV_NOLOWER_FACTOR * uint64pow(FNV_OFFSET_PRIME, 3);	// same as above except includes RGB averages as well
-uint64 FNV_NOUPPER_BASIS		= FNV_OFFSET_BASIS * FNV_NOLOWER_FACTOR;				// starting a lower 128x128 object hash with this basis is equivalent to hashing a 128x256 object pair where the upper object is all (0,0,0)
-uint64 FNV_NOUPPER_RGB_BASIS	= FNV_OFFSET_BASIS * FNV_NOLOWER_RGB_FACTOR;			// same as above except includes RGB averages as well
+uint64_t FNV_NOLOWER_FACTOR		= uint64_tpow(FNV_OFFSET_PRIME, FNV_COORDS_LEN);			// multiplying an upper 128x128 object hash by this factor is equivalent to hashing a 128x256 object pair where the lower object is all (0,0,0)
+uint64_t FNV_NOLOWER_RGB_FACTOR	= FNV_NOLOWER_FACTOR * uint64_tpow(FNV_OFFSET_PRIME, 3);	// same as above except includes RGB averages as well
+uint64_t FNV_NOUPPER_BASIS		= FNV_OFFSET_BASIS * FNV_NOLOWER_FACTOR;					// starting a lower 128x128 object hash with this basis is equivalent to hashing a 128x256 object pair where the upper object is all (0,0,0)
+uint64_t FNV_NOUPPER_RGB_BASIS	= FNV_OFFSET_BASIS * FNV_NOLOWER_RGB_FACTOR;				// same as above except includes RGB averages as well
 
 //
 // USER PREFERENCES
@@ -183,7 +186,7 @@ void load_fieldmaps()
 
 						// format is "<field_name>,<hash_combined>{,<hash_upper>,<hash_lower>}"
 						if (items.size() != 2 && items.size() != 4) {
-							ofstream err;															//Error reporting
+							ofstream err;													//Error reporting
 							err.open(ERROR_LOG.string(), ofstream::out | ofstream::app);
 							err << "Error: bad hashmap. Format is \"<field_name>,<hash_combined>{,<hash_upper>,<hash_lower>}\": " << it->path().string() << endl;
 							err.close();
@@ -193,14 +196,14 @@ void load_fieldmaps()
 						// field names are stored only once
 						string field = items[0];
 
-						uint64 hash_combined = ToNumber<uint64>(items[1]);
+						uint64_t hash_combined = ToNumber<uint64_t>(items[1]);
 						fieldmap->insert(hash_combined, field);
 
 						if (items.size() > 2) {
-							uint64 hash_upper = ToNumber<uint64>(items[2]);
+							uint64_t hash_upper = ToNumber<uint64_t>(items[2]);
 							fieldmap->insert(hash_upper, field);
 
-							uint64 hash_lower = ToNumber<uint64>(items[3]);
+							uint64_t hash_lower = ToNumber<uint64_t>(items[3]);
 							fieldmap->insert(hash_lower, field);
 						}
 					}
@@ -243,9 +246,9 @@ void GlobalContext::Init()
 }
 
 // fast 64-bit hash 
-uint64 FNV_Hash(BYTE* pData, UINT pitch, int width, int height, const coord* coords, const int len, bool use_RGB = true)
+uint64_t FNV_Hash(BYTE* pData, UINT pitch, int width, int height, const coord* coords, const int len, bool use_RGB = true)
 {
-	uint64 hash = FNV_OFFSET_BASIS;
+	uint64_t hash = FNV_OFFSET_BASIS;
 
 	float red = 0, green = 0, blue = 0;
 	size_t coord_count = 0;
@@ -288,9 +291,9 @@ uint64 FNV_Hash(BYTE* pData, UINT pitch, int width, int height, const coord* coo
 	return hash;
 }
 
-uint64 FNV_Hash_Full(BYTE* pData, UINT pitch, int width, int height)
+uint64_t FNV_Hash_Full(BYTE* pData, UINT pitch, int width, int height)
 {
-	uint64 hash = FNV_OFFSET_BASIS;
+	uint64_t hash = FNV_OFFSET_BASIS;
 
 	float red = 0, green = 0, blue = 0;
 	size_t coord_count = 0;
@@ -311,11 +314,11 @@ uint64 FNV_Hash_Full(BYTE* pData, UINT pitch, int width, int height)
 }
 
 // hash upper, lower, and combined separately 
-uint64 FNV_Hash_Combined(BYTE* pData, UINT pitch, int width, int height, uint64& hash_upper, uint64& hash_lower, const coord* coords, const int len, bool use_RGB = true)
+uint64_t FNV_Hash_Combined(BYTE* pData, UINT pitch, int width, int height, uint64_t& hash_upper, uint64_t& hash_lower, const coord* coords, const int len, bool use_RGB = true)
 {
 	hash_lower = (height > VRAM_DIM / 2) ? (use_RGB) ? FNV_NOUPPER_RGB_BASIS : FNV_NOUPPER_BASIS : 0;
 
-	uint64 hash = FNV_OFFSET_BASIS;
+	uint64_t hash = FNV_OFFSET_BASIS;
 
 	float red = 0, green = 0, blue = 0;
 	size_t coord_count = 0;
@@ -358,7 +361,7 @@ uint64 FNV_Hash_Combined(BYTE* pData, UINT pitch, int width, int height, uint64&
 	// set hash_upper equal to hash thus far
 	hash_upper = hash;
 
-	if (hash_lower) {																// make sure texture is big enough to hash lower
+	if (hash_lower) {														// make sure texture is big enough to hash lower
 		// adjust hash_upper to include lower blank object
 		hash_upper *= (use_RGB) ? FNV_NOLOWER_RGB_FACTOR : FNV_NOLOWER_FACTOR;
 
@@ -422,7 +425,7 @@ uint64 FNV_Hash_Combined(BYTE* pData, UINT pitch, int width, int height, uint64&
 	return hash;
 }
 
-bool get_fields(const uint64& hash_combined, const uint64& hash_upper, const uint64& hash_lower, string& field_combined, string& field_upper, string& field_lower)
+bool get_fields(const uint64_t& hash_combined, const uint64_t& hash_upper, const uint64_t& hash_lower, string& field_combined, string& field_upper, string& field_lower)
 {
 	unordered_set<string> fields;
 	int upper_matches = 0, lower_matches = 0;
@@ -492,7 +495,7 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 			debug << "succeeded!" << endl;
 		}
 
-		if (!use_upper && !use_lower) return NULL;												// neither file could be loaded, so no texture can be created
+		if (!use_upper && !use_lower) return NULL;							// neither file could be loaded, so no texture can be created
 	}
 
 	LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
@@ -577,7 +580,7 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 		}
 		//debug << endl;
 	}
-	newtexture->UnlockRect(0);															// Texture loaded
+	newtexture->UnlockRect(0);																// Texture loaded
 	debug << "Texture loaded successfully." << endl;
 	debug.close();
 	return(HANDLE)newtexture;
@@ -615,7 +618,7 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 
 	ofstream debug(DEBUG_LOG.string(), ofstream::out | ofstream::app);
 
-	bool handle_used = false;																			// if false, Handle will be erased from the TextureCache
+	bool handle_used = false;													// if false, Handle will be erased from the TextureCache
 	if (pTexture && Desc.Width < 640 && Desc.Height < 480 && Desc.Format == D3DFORMAT::D3DFMT_A8R8G8B8 && Desc.Pool == D3DPOOL::D3DPOOL_MANAGED)    //640x480 are video
 	{
 		D3DLOCKED_RECT Rect;
@@ -624,13 +627,13 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 		BYTE* pData = (BYTE*)Rect.pBits;
 
 		// get field matches using FNV hash
-		uint64 hash_combined = 0, hash_upper = 0, hash_lower = 0;
+		uint64_t hash_combined = 0, hash_upper = 0, hash_lower = 0;
 		string field_combined = "", field_upper = "", field_lower = "";
 
 		// get hashes
 		hash_combined = FNV_Hash_Combined(pData, pitch, Desc.Width, Desc.Height, hash_upper, hash_lower, FNV_COORDS, FNV_COORDS_LEN, true);
 
-		uint64 hash_used;
+		uint64_t hash_used;
 		bool use_combined = cache->contains(hash_combined);
 
 		if (use_combined) {														// there is an existing newhandle for hash_combined; use it!
@@ -701,7 +704,7 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 							debug << "failed..." << endl;;
 					} else {													// NO MATCH
 						if (Desc.Width > 0 && Desc.Height > 0) {
-							uint64 hash = FNV_Hash_Full(pData, pitch, Desc.Width, Desc.Height);
+							uint64_t hash = FNV_Hash_Full(pData, pitch, Desc.Width, Desc.Height);
 							if (nomatch_set.count(hash) == 0) {					// only write the image if it was not previously written
 								pTexture->UnlockRect(0);
 								ostringstream sstream;

@@ -8,20 +8,18 @@
 
 using namespace std;
 
-typedef unsigned long long uint64;
-
 class FieldMap
 {
 private:
-	typedef set<string> fieldset_t;											// holds field names; ordered so that iterators will not be invalidateds
-	typedef fieldset_t::const_iterator fieldset_iter;						// points to field names
+	typedef set<string> fieldset_t;													// holds field names; ordered so that iterators will not be invalidateds
+	typedef fieldset_t::const_iterator fieldset_iter;								// points to field names
 
 	fieldset_t fieldset;
 
 	struct fieldset_iter_hasher
 	{
 		size_t operator()(fieldset_iter iter) const
-		{						// since fieldset entries are unique, use the pointer of the field to hash fieldset_iter
+		{																			// since fieldset entries are unique, use the pointer of the field to hash fieldset_iter
 			return std::hash<const string*>()(&*iter);
 		}
 	};
@@ -30,28 +28,28 @@ private:
 	{
 		bool operator()(const fieldset_iter& lhs, const fieldset_iter& rhs)
 		{
-			return *lhs == *rhs;											// since fieldset entries are unique, use fields to compare fieldset_iters
+			return *lhs == *rhs;													// since fieldset entries are unique, use fields to compare fieldset_iters
 		}
 	};
 
 	typedef unordered_set<fieldset_iter, fieldset_iter_hasher> fieldset_iter_set_t;	// holds sets of fieldset_iter
 	typedef fieldset_iter_set_t::iterator fieldset_iter_set_iter;					// iterates sets of fieldset_iter
 
-	typedef unordered_map<uint64, fieldset_iter_set_t> fieldmap_t;			// maps hashes to a set of matching field names; unordered for O(1) access/insertion, set for collisions
+	typedef unordered_map<uint64_t, fieldset_iter_set_t> fieldmap_t;				// maps hashes to a set of matching field names; unordered for O(1) access/insertion, set for collisions
 	typedef fieldmap_t::iterator fieldmap_iter;
 
-	fieldmap_t fieldmap;													// maps original texture hash to replacement texture name
+	fieldmap_t fieldmap;															// maps original texture hash to replacement texture name
 
 public:
 
 	/* count: count matches for a given hash
 	  returns: size of fieldmap[hash]
 	*/
-	size_t count(uint64 hash);
+	size_t count(uint64_t hash);
 
 	/* insert: adds hash :-> field to the map
 	*/
-	void insert(uint64 hash,		// map key
+	void insert(uint64_t hash,		// map key
 				const string& field	// map value
 		);
 
@@ -59,22 +57,22 @@ public:
 		   if the hash does not exist in the map, an empty field is returned
 	   returns: true if the given hash is in the map, else false
 	*/
-	bool get_fields(uint64 hash,					// the hash key
+	bool get_fields(uint64_t hash,					// the hash key
 					unordered_set<string>& result	// the set in which to put the matches
 		);
 
 	/* get_first_field: gets the first field mapped to the given hash
 	  returns: true if the given hash is in the map, else false
 	*/
-	bool get_first_field(uint64 hash,	// the hash key
+	bool get_first_field(uint64_t hash,	// the hash key
 						string& result	// the string in which to place the result
 		);
 
 	/* get_intersection: returns the intersection of the sets of fields at the given hashes
 	   returns: true if the intersection is non-empty, else false
 	*/
-	bool get_intersection(uint64 hash_1,				// the first hash
-						  uint64 hash_2,				// the second hash
+	bool get_intersection(uint64_t hash_1,				// the first hash
+						  uint64_t hash_2,				// the second hash
 						  unordered_set<string>& result	// the set in which to put the intersection
 		);
 
@@ -89,16 +87,16 @@ class TextureCache
 
 private:
 
-	typedef pair<uint64, HANDLE>						nhcache_item_t;			// associates hashes with newhandles
+	typedef pair<uint64_t, HANDLE>						nhcache_item_t;			// associates hashes with newhandles
 	typedef list<nhcache_item_t>						nhcache_list_t;			// holds hashes and their associated newhandle in least-recently-accessed order
 	typedef nhcache_list_t::iterator					nhcache_list_iter;
-	typedef unordered_map<uint64, nhcache_list_iter>	nhcache_map_t;			// maps hashes to an entry in the newhandle list
+	typedef unordered_map<uint64_t, nhcache_list_iter>	nhcache_map_t;			// maps hashes to an entry in the newhandle list
 	typedef nhcache_map_t::iterator						nhcache_map_iter;
 
-	typedef unordered_map<HANDLE, uint64>				handlecache_t;			// maps a handle to a hash that has an entry in a nhcache_map_t
+	typedef unordered_map<HANDLE, uint64_t>				handlecache_t;			// maps a handle to a hash that has an entry in a nhcache_map_t
 	typedef handlecache_t::iterator						handlecache_iter;
 
-	typedef unordered_multimap<uint64, HANDLE>			reverse_handlecache_t;	// reverse indexing of handlecache; needed for when values in handlecache are removed from the nhcache
+	typedef unordered_multimap<uint64_t, HANDLE>			reverse_handlecache_t;	// reverse indexing of handlecache; needed for when values in handlecache are removed from the nhcache
 	typedef reverse_handlecache_t::iterator				reverse_handlecache_iter;
 
 	// together these make nhcache:
@@ -115,7 +113,7 @@ private:
 	/*map_insert: insert or update nhcache item pointed to by given hash in the nh_map
 	PRECONDITION: item exists in the nh_list
 	*/
-	void map_insert(uint64 hash,				// nh_map key		- the hash
+	void map_insert(uint64_t hash,				// nh_map key		- the hash
 					nhcache_list_iter item,		// nh_map value		- iterator to the nh_list item
 					HANDLE replaced				// handlecache key	- will point to the new entry in nh_map
 		);
@@ -127,7 +125,7 @@ public:
 	/*find: determine whether a hash is in the nhcache
 	  returns: true if hash is in the nh_map, else false
 	*/
-	bool TextureCache::contains(uint64 hash	// the hash to find
+	bool TextureCache::contains(uint64_t hash	// the hash to find
 		);
 
 	/*find: determine whether a HANDLE is in the handlecache
@@ -139,7 +137,7 @@ public:
 	/*at: access an element in the nhcache
 	  returns: a reference to the HANDLE mapped to hash in the nhcache if it exists, or else null
 	*/
-	HANDLE TextureCache::at(uint64 hash	// the hash key
+	HANDLE TextureCache::at(uint64_t hash	// the hash key
 		);
 	
 	/*at: access an element in the handlecache
@@ -153,7 +151,7 @@ public:
 			  else does nothing
 	*/
 	void insert(HANDLE replaced,	// the handlecache key
-				uint64 hash			// the nhcache key
+				uint64_t hash		// the nhcache key
 		);
 
 	/*insert: inserts replaced :-> hash into the cache and hash :-> replacement into the nhcache
@@ -162,7 +160,7 @@ public:
 		- replacement has been created
 	*/
 	void insert(HANDLE replaced,	// in-game texture to be replaced by replacement
-				uint64 hash,		// texture hash
+				uint64_t hash,		// texture hash
 				HANDLE replacement	// modded texture handle
 	);
 
