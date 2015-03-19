@@ -406,7 +406,9 @@ void get_images(fs::path analysis, deque<image*>& images, unordered_set<uint64> 
 		for (; iter != end; iter++) {
 			fs::path path = iter->path();
 			if (fs::is_directory(path)) {
-				if (analysis.parent_path().stem().string() == "mapdata2" && !isdigit(path.string().at(path.string().length() - 1)))
+				if (analysis.stem().string() == "mapdata2")
+					cout << "Skipping " << path.stem().string() << endl;
+				else if (analysis.parent_path().stem().string() == "mapdata2" && !isdigit(path.string().at(path.string().length() - 1)))
 					cout << "Skipping " << path.stem().string() << endl;
 				else
 					get_images(path, images, image_hashes);						// recursive
@@ -461,6 +463,9 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 	bool DO_HIGH_VAR = false;
 	bool DO_LOW_MODE = true;
 	bool DO_COLANLYZ = false;
+
+	int LOW_MODE_COUNT	= 200;
+	int COLLIDE_COUNT	= 100;
 
 
 	long_dim* sum = new long_dim[DIM_Y];
@@ -620,33 +625,32 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 	}
 
 	if (DO_LOW_MODE) {
-		// find lowest mode_count in 10x10 blocks
-		int block_width = 10;
-		int block_height = 10;
-
+		// find lowest mode_count in 2x downsampled image
+		// reverse mode_count to sort coordinates by frequency
 		coords.clear();
-		for (int y = 2; y < DIM_Y - block_height; y += block_height + 1) {
-			for (int x = 2; x < DIM_X - block_width; x += block_width + 1) {
-				coord best;
-				long low_mode_count = LONG_MAX;
-				for (int r = y; r < y + block_height; r++) {
-					for (int c = x; c < x + block_width; c++) {
-						if (mode_count[r][c] < low_mode_count) {
-							best.x = c;
-							best.y = r;
-							low_mode_count = mode_count[r][c];
-						}
-					}
-				}
-				coords.push_back(best);
-				//cout << "(" << best.x << ", " << best.y << "): " << high_var << endl;
+		map<int, set<coord>, less<int>> low_modes;
+		for (int y = 0; y < DIM_Y; y += 2) {
+			for (int x = 0; x < DIM_X; x += 2) {
+				low_modes[mode_count[y][x]].insert({ x, y });
 			}
+		}
+
+		map<int, set<coord>, less<int>>::iterator lowmode_iter = low_modes.begin();
+		int count = 0;
+		while (lowmode_iter != low_modes.end() && count < LOW_MODE_COUNT) {
+			set<coord>::iterator coord_iter = lowmode_iter->second.begin();
+			while (coord_iter != lowmode_iter->second.end() && count < LOW_MODE_COUNT) {
+				coords.push_back(*coord_iter);
+				count++;
+				coord_iter++;
+			}
+			lowmode_iter++;
 		}
 
 		// write low mode count coordinates
 		out.close();
 		out.open((dest.parent_path() / "analysis_coordinates.csv").string());
-		out << endl << "Low |Mode| Coordinates" << endl;
+		out << endl << LOW_MODE_COUNT << " Lowest |Mode| Coordinates" << endl;
 		out << "y,x" << endl;
 
 		for (coord point : coords)
