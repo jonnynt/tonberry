@@ -19,13 +19,34 @@ const static int BLOCKSIZE = 16;
 typedef unsigned int uint32;
 
 typedef struct coord {
+	enum color
+	{
+		r = 0,
+		g = 1,
+		b = 2
+	};
+
 	int x;
 	int y;
+	color c;
 
 	bool operator<(const coord& rhs) const {
-		return (rhs.y > y) || (rhs.y == y && rhs.x > x);
+		return (rhs.y > y) || (rhs.y == y && rhs.x > x) || (rhs.y == y && rhs.x == x && rhs.c > c);
+	}
+
+	bool operator==(const coord& rhs) const{
+		return rhs.y == y && rhs.x == x && rhs.c == c;
 	}
 } coord;
+
+template <>
+struct hash<coord>
+{
+	std::size_t operator()(const coord& key) const {
+		// Compute individual hash values for x, y, and c and combine them using XOR and bit shifting:
+		return ((hash<int>()(key.x) ^ (hash<int>()(key.y) << 1)) >> 1) ^ (hash<int>()(key.c) << 1);
+	}
+};
 
 //int hash1_x[64] = { 0, 16, 32, 48, 64, 80, 96, 112, 0, 16, 32, 48, 64, 80, 96, 112, 0, 16, 32, 48, 64, 80, 96, 112, 0, 16, 32, 48, 64, 80, 96, 112, 0, 16, 0, 16, 48, 96, 0, 16, 0, 16, 0, 16, 48, 96, 0, 16, 0, 16, 0, 16, 48, 96, 0, 16, 0, 16, 0, 16, 48, 96, 0, 16 };
 //int hash1_y[64] = { 0, 0, 0, 0, 0, 0, 0, 0, 16, 16, 16, 16, 16, 16, 16, 16, 32, 32, 32, 32, 32, 32, 32, 32, 48, 48, 48, 48, 48, 48, 48, 48, 64, 64, 80, 80, 80, 80, 96, 96, 112, 112, 128, 128, 128, 128, 144, 144, 160, 160, 176, 176, 176, 176, 192, 192, 208, 208, 224, 224, 224, 224, 240, 240 };
