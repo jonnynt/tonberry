@@ -456,15 +456,16 @@ void get_images(fs::path analysis, deque<image*>& images, unordered_set<uint64> 
 
 typedef long long_dim[DIM_X];
 typedef double double_dim[DIM_X];
+typedef long long_count[255];
 
 void Analyze_Pixels(fs::path analysis, fs::path dest)
 {
-	bool DO_OLD_ALGO = true;
+	bool DO_OLD_ALGO = false;
 	bool DO_HIGH_VAR = false;
 	bool DO_LOW_MODE = true;
 	bool DO_COLANLYZ = false;
 
-	int LOW_MODE_COUNT	= 200;
+	int LOW_MODE_COUNT	= 1000;
 	int COLLIDE_COUNT	= 100;
 
 
@@ -484,25 +485,25 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 	cout << " found " << images.size() << " images." << endl;
 
 	//init to 0
-	for (int y = 0; y < DIM_Y; y++) {
-		for (int x = 0; x < DIM_X; x++) {
-			sum[y][x] = 0;
-		}
-	}
+	//for (int y = 0; y < DIM_Y; y++) {
+	//	for (int x = 0; x < DIM_X; x++) {
+	//		sum[y][x] = 0;
+	//	}
+	//}
 
 
-	// get pixvals and sums
-	for (image* img_ptr : images) {
-		cv::Mat img = img_ptr->mat();
-		for (int y = 0; y < DIM_Y; y++) {
-			for (int x = 0; x < DIM_X; x++) {
-				cv::Vec3b pixel = (y < img.rows && x < img.cols) ? img.at<cv::Vec3b>(y, x) : cv::Vec3b(0, 0, 0);
-				uchar pixval = round((pixel[0] + pixel[1] + pixel[2]) / 3);
-				sum[y][x] += pixval;
-				pixvals[y][x].push_back(pixval);
-			}
-		}
-	}
+	//// get pixvals and sums
+	//for (image* img_ptr : images) {
+	//	cv::Mat img = img_ptr->mat();
+	//	for (int y = 0; y < DIM_Y; y++) {
+	//		for (int x = 0; x < DIM_X; x++) {
+	//			cv::Vec3b pixel = (y < img.rows && x < img.cols) ? img.at<cv::Vec3b>(y, x) : cv::Vec3b(0, 0, 0);
+	//			uchar pixval = round((pixel[0] + pixel[1] + pixel[2]) / 3);
+	//			sum[y][x] += pixval;
+	//			pixvals[y][x].push_back(pixval);
+	//		}
+	//	}
+	//}
 
 	map<uint64, set<int>> hashmap;
 	clock_t start_time, end_time, total_time = 0;
@@ -560,6 +561,7 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 			out << y << "," << x << "," << sum[y][x] << "," << mean[y][x] << "," << var[y][x] << "," << mode_count[y][x] << endl;
 		}
 	}
+	out.close();
 
 	deque<coord> coords;
 	
@@ -591,13 +593,14 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 		}
 
 		// write high-variance coordinates
-		out.close();
 		out.open((dest.parent_path() / "analysis_coordinates.csv").string());
 		out << endl << "High-Variance Coordinates" << endl;
 		out << "y,x" << endl;
 
 		for (coord point : coords)
 			out << point.y << "," << point.x << endl;
+
+		out.close();
 
 		// hash images using high-variance coordinates and store collisions
 		hashmap.clear();
@@ -625,38 +628,92 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 	}
 
 	if (DO_LOW_MODE) {
-		// find lowest mode_count in 2x downsampled image
-		// reverse mode_count to sort coordinates by frequency
+		// find lowest mode_count in all collision images for LOW_MODE_COUNT iterations
 		coords.clear();
-		map<int, set<coord>, less<int>> low_modes;
-		for (int y = 0; y < DIM_Y; y += 2) {
-			for (int x = 0; x < DIM_X; x += 2) {
-				low_modes[mode_count[y][x]].insert({ x, y });
-			}
-		}
+		hashmap.clear();
+		// init hashmap with all images colliding
+		for (int i = 0; i < images.size(); i++) hashmap[0].insert(i);
+		map<long, set<coord>> low_modes;
 
-		map<int, set<coord>, less<int>>::iterator lowmode_iter = low_modes.begin();
-		int count = 0;
-		while (lowmode_iter != low_modes.end() && count < LOW_MODE_COUNT) {
-			set<coord>::iterator coord_iter = lowmode_iter->second.begin();
-			while (coord_iter != lowmode_iter->second.end() && count < LOW_MODE_COUNT) {
-				coords.push_back(*coord_iter);
-				count++;
-				coord_iter++;
+		for (int i = 0; i < LOW_MODE_COUNT; i++) {
+			// populate low_modes map from collision images
+			// get counts for each pixel value at each coordinate
+			long* pixcounts = new long[DIM_Y * DIM_X * 256];
+			for (int y = 0; y < DIM_Y; y++) for (int x = 0; x < DIM_X; x++) for (int p = 0; p < 256; p++) pixcounts[y * DIM_X * 256 + x * 256 + p] = 0;	// initialize to 0
+
+			for (pair<uint64, set<int>> hashset : hashmap) {
+				if (hashset.second.size() < 2) continue;
+
+				for (int index : hashset.second) {
+					cv::Mat img = images[index]->mat();
+					for (int y = 0; y < DIM_Y; y++) {
+						for (int x = 0; x < DIM_X; x++) {
+							cv::Vec3b pixel = (y < img.rows && x < img.cols) ? img.at<cv::Vec3b>(y, x) : cv::Vec3b(0, 0, 0);
+							uchar pixval = round((pixel[0] + pixel[1] + pixel[2]) / 3);
+							pixcounts[y * DIM_X * 256 + x * 256 + pixval]++;
+						}
+					}
+				}
 			}
-			lowmode_iter++;
+
+			// get pixcount modes and add to low_modes
+			low_modes.clear();
+			for (int y = 0; y < DIM_Y; y++) {
+				for (int x = 0; x < DIM_X; x++) {
+					low_modes[*max_element(pixcounts + y * DIM_X * 256 + x * 256, pixcounts + y * DIM_X * 256 + x * 256 + 255, isless<long, long>)].insert({ x, y });
+				}
+			}
+
+			delete[] pixcounts;
+
+			// push first coord (which has lowest mode) from low_modes to coords
+			coord lowmode;
+			// if coords already contains lowmode, skip it
+			bool duplicate = true;
+			while (duplicate) {
+				lowmode = *(low_modes.begin()->second.begin());
+				duplicate = false;
+				deque<coord>::iterator iter = coords.begin();
+				for (; iter != coords.end() && !duplicate; iter++) {
+					if (iter->x == lowmode.x && iter->y == lowmode.y) {
+						low_modes.begin()->second.erase(low_modes.begin()->second.begin());
+						if (low_modes.begin()->second.empty())
+							low_modes.erase(low_modes.begin());
+						duplicate = true;
+					}
+				}
+			}
+			coords.push_back(lowmode);
+
+			if (i == LOW_MODE_COUNT) break;
+
+			// hash images using low mode_count coordinates and store collisions
+			hashmap.clear();
+			for (int i = 0; i < images.size(); i++) {
+				cv::Mat img = images[i]->mat();
+				uint64 hash;
+
+				hash = FNV_Hash(img, coords);
+				hashmap[hash].insert(i);
+			}
+
+			// count collisions
+			collisions = 0;
+			for (pair<uint64, set<int>> hashset : hashmap) {
+				collisions += hashset.second.size() - 1;
+			}
+
+			cout << "After lowmode coordinate " << i << " (" << lowmode.x << ", " << lowmode.y << "): " << collisions << endl;
 		}
 
 		// write low mode count coordinates
-		out.close();
 		out.open((dest.parent_path() / "analysis_coordinates.csv").string());
 		out << endl << LOW_MODE_COUNT << " Lowest |Mode| Coordinates" << endl;
 		out << "y,x" << endl;
 
 		for (coord point : coords)
-			out << point.y << "," << point.x << endl;
+			out << point.y << "," << point.x << "," << mode_count[point.y][point.x] << endl;
 
-		// hash images using low mode_count coordinates and store collisions
 		hashmap.clear();
 		total_time = 0;
 		for (int i = 0; i < images.size(); i++) {
@@ -671,12 +728,6 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 		}
 		avg_time = ((double)total_time) / images.size();
 
-		// count collisions
-		collisions = 0;
-		for (pair<uint64, set<int>> hashset : hashmap) {
-			collisions += hashset.second.size() - 1;
-		}
-
 		cout << "Low-Mode (" << coords.size() << "):  " << images.size() << " images; " << collisions << " collisions; ~" << avg_time << " ms per image" << endl;
 
 		// find the differing coordinates in images with hash collisions
@@ -688,12 +739,10 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 			if (hashset.second.size() < 2) continue;
 
 			// write collisions to collout
-			if (hashset.second.size() > 1) {
-				collout << hashset.first;
-				for (int i : hashset.second)
-					collout << "," << images[i]->path.stem().string() << " (" << FNV_Full(images[i]->mat()) << ")";
-				collout << endl;
-			}
+			collout << hashset.first;
+			for (int i : hashset.second)
+				collout << "," << images[i]->path.stem().string() << " (" << FNV_Full(images[i]->mat()) << ")";
+			collout << endl;
 		}
 	}
 
