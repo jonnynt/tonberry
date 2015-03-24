@@ -10,8 +10,25 @@
 #include <opencv2/opencv.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <sstream>
 namespace fs = boost::filesystem;
-using namespace std;
+using std::cout;
+using std::cin;
+using std::endl;
+using std::string;
+using std::hash;
+using std::array;
+using std::deque;
+using std::set;
+using std::unordered_set;
+using std::map;
+using std::pair;
+using std::min;
+using std::max_element;
+using std::ofstream;
+using std::greater;
+using std::list;
+using std::stringstream;
 
 const static fs::path FF8_ROOT("C:\\Program Files (x86)\\Steam\\steamapps\\common\\FINAL FANTASY VIII");
 const static int BLOCKSIZE = 16;
@@ -21,6 +38,7 @@ typedef unsigned int uint32;
 typedef struct coord {
 	enum color
 	{
+		none = -1,
 		r = 0,
 		g = 1,
 		b = 2
@@ -30,12 +48,40 @@ typedef struct coord {
 	int y;
 	color c;
 
+	coord(int _x, int _y, color _c) : x(_x), y(_y), c(_c) {}
+	coord(int _x = -1, int _y = -1, int _c = -1) : x(_x), y(_y)
+	{
+		if (_c < -1 || _c > 2) c = none;
+		else c = (color)_c;
+	}
+
 	bool operator<(const coord& rhs) const {
 		return (rhs.y > y) || (rhs.y == y && rhs.x > x) || (rhs.y == y && rhs.x == x && rhs.c > c);
 	}
 
-	bool operator==(const coord& rhs) const{
+	bool operator==(const coord& rhs) const {
 		return rhs.y == y && rhs.x == x && rhs.c == c;
+	}
+
+	string string() {
+		stringstream ss;
+		ss << "(" << x << ", " << y;
+		switch (c) {
+		case 0: {
+			ss << ", r";
+			break;
+		}
+		case 1: {
+			ss << ", g";
+			break;
+		}
+		case 2: {
+			ss << ", b";
+			break;
+		}
+		}
+		ss << ")";
+		return ss.str();
 	}
 } coord;
 
@@ -56,13 +102,18 @@ coord hash1[64] = { coord{ 0, 0 }, coord{ 16, 0 }, coord{ 32, 0 }, coord{ 48, 0 
 //coord high_var128[64] = { coord(62, 0), coord(62, 1), coord(56, 2), coord(4, 7), coord(62, 59), coord(5, 135), coord(100, 135), coord(12, 149), coord(0, 149), coord(126, 150), coord(28, 163), coord(36, 163), coord(44, 165), coord(34, 165), coord(30, 165), coord(40, 166), coord(42, 166), coord(54, 166), coord(36, 166), coord(15, 179), coord(9, 179), coord(5, 180), coord(68, 180), coord(9, 180), coord(15, 180), coord(5, 181), coord(73, 181), coord(11, 181), coord(7, 181), coord(9, 181), coord(37, 181), coord(9, 182), coord(5, 182), coord(11, 182), coord(3, 182), coord(19, 182), coord(25, 182), coord(73, 182), coord(7, 182), coord(23, 183), coord(22, 183), coord(127, 183), coord(11, 183), coord(21, 183), coord(9, 183), coord(20, 183), coord(55, 183), coord(15, 183), coord(37, 183), coord(1, 183), coord(61, 183), coord(13, 183), coord(127, 184), coord(127, 185), coord(71, 185), coord(127, 186), coord(123, 189), coord(124, 189), coord(123, 191), coord(10, 236), coord(26, 240), coord(12, 241), coord(34, 251), coord(14, 255) };
 //coord high_var_block128_66[66] = { coord(4, 7), coord(24, 10), coord(56, 2), coord(80, 17), coord(99, 17), coord(126, 8), coord(3, 40), coord(38, 35), coord(56, 30), coord(72, 43), coord(94, 30), coord(112, 31), coord(10, 55), coord(24, 57), coord(62, 59), coord(65, 60), coord(101, 59), coord(107, 57), coord(9, 85), coord(28, 74), coord(63, 72), coord(65, 72), coord(87, 80), coord(125, 84), coord(2, 97), coord(25, 104), coord(50, 114), coord(71, 111), coord(97, 98), coord(121, 98), coord(5, 135), coord(39, 133), coord(49, 131), coord(66, 128), coord(100, 135), coord(126, 128), coord(12, 149), coord(28, 147), coord(54, 153), coord(83, 143), coord(98, 154), coord(126, 150), coord(5, 180), coord(23, 183), coord(44, 165), coord(73, 181), coord(95, 183), coord(125, 184), coord(16, 186), coord(25, 186), coord(51, 186), coord(73, 186), coord(96, 190), coord(123, 189), coord(16, 218), coord(26, 214), coord(44, 226), coord(66, 229), coord(90, 213), coord(110, 211), coord(10, 236), coord(26, 240), coord(54, 244), coord(78, 248), coord(86, 240), coord(122, 238) };
 //array<coord, 121> high_var_block64_121 = { coord{ 4, 7 }, coord{ 14, 9 }, coord{ 24, 10 }, coord{ 44, 2 }, coord{ 54, 2 }, coord{ 62, 2 }, coord{ 68, 2 }, coord{ 81, 3 }, coord{ 90, 9 }, coord{ 101, 11 }, coord{ 121, 8 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 27, 20 }, coord{ 38, 21 }, coord{ 54, 18 }, coord{ 63, 19 }, coord{ 72, 21 }, coord{ 80, 17 }, coord{ 99, 17 }, coord{ 103, 17 }, coord{ 119, 21 }, coord{ 8, 28 }, coord{ 13, 24 }, coord{ 30, 32 }, coord{ 40, 24 }, coord{ 54, 27 }, coord{ 57, 30 }, coord{ 73, 32 }, coord{ 84, 32 }, coord{ 94, 30 }, coord{ 110, 31 }, coord{ 112, 31 }, coord{ 3, 40 }, coord{ 20, 41 }, coord{ 28, 36 }, coord{ 38, 35 }, coord{ 52, 44 }, coord{ 57, 44 }, coord{ 72, 43 }, coord{ 83, 35 }, coord{ 98, 35 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 22, 54 }, coord{ 24, 55 }, coord{ 44, 48 }, coord{ 54, 51 }, coord{ 62, 52 }, coord{ 73, 54 }, coord{ 82, 54 }, coord{ 98, 54 }, coord{ 109, 55 }, coord{ 115, 50 }, coord{ 10, 62 }, coord{ 22, 57 }, coord{ 24, 57 }, coord{ 41, 64 }, coord{ 55, 61 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 84, 63 }, coord{ 91, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 11, 71 }, coord{ 22, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 63, 72 }, coord{ 68, 73 }, coord{ 87, 75 }, coord{ 94, 77 }, coord{ 101, 74 }, coord{ 118, 71 }, coord{ 9, 85 }, coord{ 19, 88 }, coord{ 31, 88 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 80 }, coord{ 77, 85 }, coord{ 87, 80 }, coord{ 97, 84 }, coord{ 104, 79 }, coord{ 121, 82 }, coord{ 2, 97 }, coord{ 22, 92 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 91 }, coord{ 71, 99 }, coord{ 79, 90 }, coord{ 97, 98 }, coord{ 108, 99 }, coord{ 121, 98 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 104 }, coord{ 36, 105 }, coord{ 55, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 93, 102 }, coord{ 110, 102 }, coord{ 112, 106 }, coord{ 3, 120 }, coord{ 20, 119 }, coord{ 26, 114 }, coord{ 35, 112 }, coord{ 50, 114 }, coord{ 63, 117 }, coord{ 76, 118 }, coord{ 79, 116 }, coord{ 99, 119 }, coord{ 105, 112 }, coord{ 120, 113 } };
-array<coord, 253> high_var_block256_253 = { coord{ 4, 7 }, coord{ 14, 9 }, coord{ 24, 10 }, coord{ 44, 2 }, coord{ 54, 2 }, coord{ 62, 2 }, coord{ 68, 2 }, coord{ 81, 3 }, coord{ 90, 9 }, coord{ 101, 11 }, coord{ 121, 8 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 27, 20 }, coord{ 38, 21 }, coord{ 54, 18 }, coord{ 63, 19 }, coord{ 72, 21 }, coord{ 80, 17 }, coord{ 99, 17 }, coord{ 103, 17 }, coord{ 119, 21 }, coord{ 8, 28 }, coord{ 13, 24 }, coord{ 30, 32 }, coord{ 40, 24 }, coord{ 54, 27 }, coord{ 57, 30 }, coord{ 73, 32 }, coord{ 84, 32 }, coord{ 94, 30 }, coord{ 110, 31 }, coord{ 112, 31 }, coord{ 3, 40 }, coord{ 20, 41 }, coord{ 28, 36 }, coord{ 38, 35 }, coord{ 52, 44 }, coord{ 57, 44 }, coord{ 72, 43 }, coord{ 83, 35 }, coord{ 98, 35 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 22, 54 }, coord{ 24, 55 }, coord{ 44, 48 }, coord{ 54, 51 }, coord{ 62, 52 }, coord{ 73, 54 }, coord{ 82, 54 }, coord{ 98, 54 }, coord{ 109, 55 }, coord{ 115, 50 }, coord{ 10, 62 }, coord{ 22, 57 }, coord{ 24, 57 }, coord{ 41, 64 }, coord{ 55, 61 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 84, 63 }, coord{ 91, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 11, 71 }, coord{ 22, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 63, 72 }, coord{ 68, 73 }, coord{ 87, 75 }, coord{ 94, 77 }, coord{ 101, 74 }, coord{ 118, 71 }, coord{ 9, 85 }, coord{ 19, 88 }, coord{ 31, 88 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 80 }, coord{ 77, 85 }, coord{ 87, 80 }, coord{ 97, 84 }, coord{ 104, 79 }, coord{ 121, 82 }, coord{ 2, 97 }, coord{ 22, 92 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 91 }, coord{ 71, 99 }, coord{ 79, 90 }, coord{ 97, 98 }, coord{ 108, 99 }, coord{ 121, 98 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 104 }, coord{ 36, 105 }, coord{ 55, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 93, 102 }, coord{ 110, 102 }, coord{ 112, 106 }, coord{ 3, 120 }, coord{ 20, 119 }, coord{ 26, 114 }, coord{ 35, 112 }, coord{ 50, 114 }, coord{ 63, 117 }, coord{ 76, 118 }, coord{ 79, 116 }, coord{ 99, 119 }, coord{ 105, 112 }, coord{ 120, 113 }, coord{ 3, 132 }, coord{ 15, 127 }, coord{ 31, 132 }, coord{ 44, 130 }, coord{ 49, 131 }, coord{ 64, 128 }, coord{ 69, 128 }, coord{ 79, 128 }, coord{ 94, 128 }, coord{ 104, 131 }, coord{ 120, 129 }, coord{ 5, 135 }, coord{ 16, 142 }, coord{ 27, 134 }, coord{ 39, 134 }, coord{ 53, 138 }, coord{ 57, 136 }, coord{ 69, 136 }, coord{ 83, 143 }, coord{ 99, 135 }, coord{ 104, 136 }, coord{ 119, 137 }, coord{ 4, 153 }, coord{ 22, 146 }, coord{ 28, 147 }, coord{ 44, 145 }, coord{ 54, 153 }, coord{ 64, 152 }, coord{ 74, 153 }, coord{ 88, 154 }, coord{ 98, 154 }, coord{ 110, 154 }, coord{ 118, 153 }, coord{ 10, 164 }, coord{ 22, 161 }, coord{ 28, 163 }, coord{ 44, 165 }, coord{ 48, 165 }, coord{ 58, 161 }, coord{ 68, 159 }, coord{ 82, 156 }, coord{ 98, 157 }, coord{ 110, 157 }, coord{ 118, 159 }, coord{ 8, 176 }, coord{ 15, 176 }, coord{ 25, 175 }, coord{ 44, 168 }, coord{ 52, 167 }, coord{ 62, 167 }, coord{ 68, 168 }, coord{ 79, 170 }, coord{ 98, 172 }, coord{ 104, 174 }, coord{ 114, 174 }, coord{ 5, 180 }, coord{ 22, 183 }, coord{ 25, 182 }, coord{ 37, 183 }, coord{ 55, 183 }, coord{ 61, 183 }, coord{ 73, 181 }, coord{ 79, 183 }, coord{ 95, 183 }, coord{ 107, 186 }, coord{ 119, 187 }, coord{ 8, 193 }, coord{ 16, 191 }, coord{ 31, 191 }, coord{ 44, 191 }, coord{ 48, 195 }, coord{ 61, 193 }, coord{ 70, 189 }, coord{ 80, 190 }, coord{ 96, 190 }, coord{ 106, 191 }, coord{ 115, 190 }, coord{ 10, 202 }, coord{ 16, 209 }, coord{ 28, 204 }, coord{ 44, 202 }, coord{ 50, 207 }, coord{ 66, 203 }, coord{ 76, 200 }, coord{ 86, 203 }, coord{ 90, 207 }, coord{ 106, 200 }, coord{ 118, 209 }, coord{ 8, 218 }, coord{ 16, 218 }, coord{ 26, 214 }, coord{ 36, 216 }, coord{ 48, 218 }, coord{ 62, 220 }, coord{ 74, 215 }, coord{ 86, 218 }, coord{ 90, 213 }, coord{ 110, 211 }, coord{ 118, 216 }, coord{ 2, 226 }, coord{ 22, 223 }, coord{ 30, 228 }, coord{ 44, 226 }, coord{ 50, 230 }, coord{ 66, 229 }, coord{ 72, 227 }, coord{ 80, 226 }, coord{ 98, 224 }, coord{ 110, 224 }, coord{ 114, 224 }, coord{ 10, 236 }, coord{ 20, 235 }, coord{ 26, 240 }, coord{ 38, 238 }, coord{ 48, 234 }, coord{ 66, 240 }, coord{ 74, 239 }, coord{ 86, 240 }, coord{ 98, 241 }, coord{ 104, 239 }, coord{ 120, 234 }, coord{ 8, 244 }, coord{ 20, 244 }, coord{ 28, 251 }, coord{ 38, 244 }, coord{ 54, 244 }, coord{ 60, 245 }, coord{ 70, 247 }, coord{ 84, 248 }, coord{ 92, 250 }, coord{ 108, 251 }, coord{ 120, 252 } };
-coord high_var_block256_collision44[297] = { coord{ 4, 7 }, coord{ 14, 9 }, coord{ 24, 10 }, coord{ 44, 2 }, coord{ 54, 2 }, coord{ 62, 2 }, coord{ 68, 2 }, coord{ 81, 3 }, coord{ 90, 9 }, coord{ 101, 11 }, coord{ 121, 8 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 27, 20 }, coord{ 38, 21 }, coord{ 54, 18 }, coord{ 63, 19 }, coord{ 72, 21 }, coord{ 80, 17 }, coord{ 99, 17 }, coord{ 103, 17 }, coord{ 119, 21 }, coord{ 8, 28 }, coord{ 13, 24 }, coord{ 30, 32 }, coord{ 40, 24 }, coord{ 54, 27 }, coord{ 57, 30 }, coord{ 73, 32 }, coord{ 84, 32 }, coord{ 94, 30 }, coord{ 110, 31 }, coord{ 112, 31 }, coord{ 3, 40 }, coord{ 20, 41 }, coord{ 28, 36 }, coord{ 38, 35 }, coord{ 52, 44 }, coord{ 57, 44 }, coord{ 72, 43 }, coord{ 83, 35 }, coord{ 98, 35 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 22, 54 }, coord{ 24, 55 }, coord{ 44, 48 }, coord{ 54, 51 }, coord{ 62, 52 }, coord{ 73, 54 }, coord{ 82, 54 }, coord{ 98, 54 }, coord{ 109, 55 }, coord{ 115, 50 }, coord{ 10, 62 }, coord{ 22, 57 }, coord{ 24, 57 }, coord{ 41, 64 }, coord{ 55, 61 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 84, 63 }, coord{ 91, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 11, 71 }, coord{ 22, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 63, 72 }, coord{ 68, 73 }, coord{ 87, 75 }, coord{ 94, 77 }, coord{ 101, 74 }, coord{ 118, 71 }, coord{ 9, 85 }, coord{ 19, 88 }, coord{ 31, 88 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 80 }, coord{ 77, 85 }, coord{ 87, 80 }, coord{ 97, 84 }, coord{ 104, 79 }, coord{ 121, 82 }, coord{ 2, 97 }, coord{ 22, 92 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 91 }, coord{ 71, 99 }, coord{ 79, 90 }, coord{ 97, 98 }, coord{ 108, 99 }, coord{ 121, 98 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 104 }, coord{ 36, 105 }, coord{ 55, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 93, 102 }, coord{ 110, 102 }, coord{ 112, 106 }, coord{ 3, 120 }, coord{ 20, 119 }, coord{ 26, 114 }, coord{ 35, 112 }, coord{ 50, 114 }, coord{ 63, 117 }, coord{ 76, 118 }, coord{ 79, 116 }, coord{ 99, 119 }, coord{ 105, 112 }, coord{ 120, 113 }, coord{ 3, 132 }, coord{ 15, 127 }, coord{ 31, 132 }, coord{ 44, 130 }, coord{ 49, 131 }, coord{ 64, 128 }, coord{ 69, 128 }, coord{ 79, 128 }, coord{ 94, 128 }, coord{ 104, 131 }, coord{ 120, 129 }, coord{ 5, 135 }, coord{ 16, 142 }, coord{ 27, 134 }, coord{ 39, 134 }, coord{ 53, 138 }, coord{ 57, 136 }, coord{ 69, 136 }, coord{ 83, 143 }, coord{ 99, 135 }, coord{ 104, 136 }, coord{ 119, 137 }, coord{ 4, 153 }, coord{ 22, 146 }, coord{ 28, 147 }, coord{ 44, 145 }, coord{ 54, 153 }, coord{ 64, 152 }, coord{ 74, 153 }, coord{ 88, 154 }, coord{ 98, 154 }, coord{ 110, 154 }, coord{ 118, 153 }, coord{ 10, 164 }, coord{ 22, 161 }, coord{ 28, 163 }, coord{ 44, 165 }, coord{ 48, 165 }, coord{ 58, 161 }, coord{ 68, 159 }, coord{ 82, 156 }, coord{ 98, 157 }, coord{ 110, 157 }, coord{ 118, 159 }, coord{ 8, 176 }, coord{ 15, 176 }, coord{ 25, 175 }, coord{ 44, 168 }, coord{ 52, 167 }, coord{ 62, 167 }, coord{ 68, 168 }, coord{ 79, 170 }, coord{ 98, 172 }, coord{ 104, 174 }, coord{ 114, 174 }, coord{ 5, 180 }, coord{ 22, 183 }, coord{ 25, 182 }, coord{ 37, 183 }, coord{ 55, 183 }, coord{ 61, 183 }, coord{ 73, 181 }, coord{ 79, 183 }, coord{ 95, 183 }, coord{ 107, 186 }, coord{ 119, 187 }, coord{ 8, 193 }, coord{ 16, 191 }, coord{ 31, 191 }, coord{ 44, 191 }, coord{ 48, 195 }, coord{ 61, 193 }, coord{ 70, 189 }, coord{ 80, 190 }, coord{ 96, 190 }, coord{ 106, 191 }, coord{ 115, 190 }, coord{ 10, 202 }, coord{ 16, 209 }, coord{ 28, 204 }, coord{ 44, 202 }, coord{ 50, 207 }, coord{ 66, 203 }, coord{ 76, 200 }, coord{ 86, 203 }, coord{ 90, 207 }, coord{ 106, 200 }, coord{ 118, 209 }, coord{ 8, 218 }, coord{ 16, 218 }, coord{ 26, 214 }, coord{ 36, 216 }, coord{ 48, 218 }, coord{ 62, 220 }, coord{ 74, 215 }, coord{ 86, 218 }, coord{ 90, 213 }, coord{ 110, 211 }, coord{ 118, 216 }, coord{ 2, 226 }, coord{ 22, 223 }, coord{ 30, 228 }, coord{ 44, 226 }, coord{ 50, 230 }, coord{ 66, 229 }, coord{ 72, 227 }, coord{ 80, 226 }, coord{ 98, 224 }, coord{ 110, 224 }, coord{ 114, 224 }, coord{ 10, 236 }, coord{ 20, 235 }, coord{ 26, 240 }, coord{ 38, 238 }, coord{ 48, 234 }, coord{ 66, 240 }, coord{ 74, 239 }, coord{ 86, 240 }, coord{ 98, 241 }, coord{ 104, 239 }, coord{ 120, 234 }, coord{ 8, 244 }, coord{ 20, 244 }, coord{ 28, 251 }, coord{ 38, 244 }, coord{ 54, 244 }, coord{ 60, 245 }, coord{ 70, 247 }, coord{ 84, 248 }, coord{ 92, 250 }, coord{ 108, 251 }, coord{ 120, 252 }, coord{ 97, 198 }, coord{ 104, 198 }, coord{ 106, 198 }, coord{ 107, 198 }, coord{ 96, 198 }, coord{ 98, 198 }, coord{ 99, 198 }, coord{ 100, 198 }, coord{ 101, 198 }, coord{ 102, 198 }, coord{ 103, 198 }, coord{ 105, 198 }, coord{ 124, 193 }, coord{ 125, 193 }, coord{ 126, 193 }, coord{ 127, 193 }, coord{ 120, 193 }, coord{ 121, 193 }, coord{ 122, 193 }, coord{ 123, 193 }, coord{ 117, 193 }, coord{ 12, 225 }, coord{ 113, 193 }, coord{ 119, 193 }, coord{ 112, 193 }, coord{ 118, 193 }, coord{ 114, 193 }, coord{ 116, 193 }, coord{ 115, 193 }, coord{ 116, 197 }, coord{ 117, 197 }, coord{ 120, 196 }, coord{ 121, 196 }, coord{ 124, 196 }, coord{ 125, 196 }, coord{ 126, 196 }, coord{ 127, 196 }, coord{ 112, 197 }, coord{ 113, 197 }, coord{ 118, 197 }, coord{ 119, 197 }, coord{ 120, 197 }, coord{ 121, 197 }, coord{ 197, 124 } };
+//array<coord, 253> high_var_block256_253 = { coord{ 4, 7 }, coord{ 14, 9 }, coord{ 24, 10 }, coord{ 44, 2 }, coord{ 54, 2 }, coord{ 62, 2 }, coord{ 68, 2 }, coord{ 81, 3 }, coord{ 90, 9 }, coord{ 101, 11 }, coord{ 121, 8 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 27, 20 }, coord{ 38, 21 }, coord{ 54, 18 }, coord{ 63, 19 }, coord{ 72, 21 }, coord{ 80, 17 }, coord{ 99, 17 }, coord{ 103, 17 }, coord{ 119, 21 }, coord{ 8, 28 }, coord{ 13, 24 }, coord{ 30, 32 }, coord{ 40, 24 }, coord{ 54, 27 }, coord{ 57, 30 }, coord{ 73, 32 }, coord{ 84, 32 }, coord{ 94, 30 }, coord{ 110, 31 }, coord{ 112, 31 }, coord{ 3, 40 }, coord{ 20, 41 }, coord{ 28, 36 }, coord{ 38, 35 }, coord{ 52, 44 }, coord{ 57, 44 }, coord{ 72, 43 }, coord{ 83, 35 }, coord{ 98, 35 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 22, 54 }, coord{ 24, 55 }, coord{ 44, 48 }, coord{ 54, 51 }, coord{ 62, 52 }, coord{ 73, 54 }, coord{ 82, 54 }, coord{ 98, 54 }, coord{ 109, 55 }, coord{ 115, 50 }, coord{ 10, 62 }, coord{ 22, 57 }, coord{ 24, 57 }, coord{ 41, 64 }, coord{ 55, 61 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 84, 63 }, coord{ 91, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 11, 71 }, coord{ 22, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 63, 72 }, coord{ 68, 73 }, coord{ 87, 75 }, coord{ 94, 77 }, coord{ 101, 74 }, coord{ 118, 71 }, coord{ 9, 85 }, coord{ 19, 88 }, coord{ 31, 88 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 80 }, coord{ 77, 85 }, coord{ 87, 80 }, coord{ 97, 84 }, coord{ 104, 79 }, coord{ 121, 82 }, coord{ 2, 97 }, coord{ 22, 92 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 91 }, coord{ 71, 99 }, coord{ 79, 90 }, coord{ 97, 98 }, coord{ 108, 99 }, coord{ 121, 98 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 104 }, coord{ 36, 105 }, coord{ 55, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 93, 102 }, coord{ 110, 102 }, coord{ 112, 106 }, coord{ 3, 120 }, coord{ 20, 119 }, coord{ 26, 114 }, coord{ 35, 112 }, coord{ 50, 114 }, coord{ 63, 117 }, coord{ 76, 118 }, coord{ 79, 116 }, coord{ 99, 119 }, coord{ 105, 112 }, coord{ 120, 113 }, coord{ 3, 132 }, coord{ 15, 127 }, coord{ 31, 132 }, coord{ 44, 130 }, coord{ 49, 131 }, coord{ 64, 128 }, coord{ 69, 128 }, coord{ 79, 128 }, coord{ 94, 128 }, coord{ 104, 131 }, coord{ 120, 129 }, coord{ 5, 135 }, coord{ 16, 142 }, coord{ 27, 134 }, coord{ 39, 134 }, coord{ 53, 138 }, coord{ 57, 136 }, coord{ 69, 136 }, coord{ 83, 143 }, coord{ 99, 135 }, coord{ 104, 136 }, coord{ 119, 137 }, coord{ 4, 153 }, coord{ 22, 146 }, coord{ 28, 147 }, coord{ 44, 145 }, coord{ 54, 153 }, coord{ 64, 152 }, coord{ 74, 153 }, coord{ 88, 154 }, coord{ 98, 154 }, coord{ 110, 154 }, coord{ 118, 153 }, coord{ 10, 164 }, coord{ 22, 161 }, coord{ 28, 163 }, coord{ 44, 165 }, coord{ 48, 165 }, coord{ 58, 161 }, coord{ 68, 159 }, coord{ 82, 156 }, coord{ 98, 157 }, coord{ 110, 157 }, coord{ 118, 159 }, coord{ 8, 176 }, coord{ 15, 176 }, coord{ 25, 175 }, coord{ 44, 168 }, coord{ 52, 167 }, coord{ 62, 167 }, coord{ 68, 168 }, coord{ 79, 170 }, coord{ 98, 172 }, coord{ 104, 174 }, coord{ 114, 174 }, coord{ 5, 180 }, coord{ 22, 183 }, coord{ 25, 182 }, coord{ 37, 183 }, coord{ 55, 183 }, coord{ 61, 183 }, coord{ 73, 181 }, coord{ 79, 183 }, coord{ 95, 183 }, coord{ 107, 186 }, coord{ 119, 187 }, coord{ 8, 193 }, coord{ 16, 191 }, coord{ 31, 191 }, coord{ 44, 191 }, coord{ 48, 195 }, coord{ 61, 193 }, coord{ 70, 189 }, coord{ 80, 190 }, coord{ 96, 190 }, coord{ 106, 191 }, coord{ 115, 190 }, coord{ 10, 202 }, coord{ 16, 209 }, coord{ 28, 204 }, coord{ 44, 202 }, coord{ 50, 207 }, coord{ 66, 203 }, coord{ 76, 200 }, coord{ 86, 203 }, coord{ 90, 207 }, coord{ 106, 200 }, coord{ 118, 209 }, coord{ 8, 218 }, coord{ 16, 218 }, coord{ 26, 214 }, coord{ 36, 216 }, coord{ 48, 218 }, coord{ 62, 220 }, coord{ 74, 215 }, coord{ 86, 218 }, coord{ 90, 213 }, coord{ 110, 211 }, coord{ 118, 216 }, coord{ 2, 226 }, coord{ 22, 223 }, coord{ 30, 228 }, coord{ 44, 226 }, coord{ 50, 230 }, coord{ 66, 229 }, coord{ 72, 227 }, coord{ 80, 226 }, coord{ 98, 224 }, coord{ 110, 224 }, coord{ 114, 224 }, coord{ 10, 236 }, coord{ 20, 235 }, coord{ 26, 240 }, coord{ 38, 238 }, coord{ 48, 234 }, coord{ 66, 240 }, coord{ 74, 239 }, coord{ 86, 240 }, coord{ 98, 241 }, coord{ 104, 239 }, coord{ 120, 234 }, coord{ 8, 244 }, coord{ 20, 244 }, coord{ 28, 251 }, coord{ 38, 244 }, coord{ 54, 244 }, coord{ 60, 245 }, coord{ 70, 247 }, coord{ 84, 248 }, coord{ 92, 250 }, coord{ 108, 251 }, coord{ 120, 252 } };
+//coord high_var_block256_collision44[297] = { coord{ 4, 7 }, coord{ 14, 9 }, coord{ 24, 10 }, coord{ 44, 2 }, coord{ 54, 2 }, coord{ 62, 2 }, coord{ 68, 2 }, coord{ 81, 3 }, coord{ 90, 9 }, coord{ 101, 11 }, coord{ 121, 8 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 27, 20 }, coord{ 38, 21 }, coord{ 54, 18 }, coord{ 63, 19 }, coord{ 72, 21 }, coord{ 80, 17 }, coord{ 99, 17 }, coord{ 103, 17 }, coord{ 119, 21 }, coord{ 8, 28 }, coord{ 13, 24 }, coord{ 30, 32 }, coord{ 40, 24 }, coord{ 54, 27 }, coord{ 57, 30 }, coord{ 73, 32 }, coord{ 84, 32 }, coord{ 94, 30 }, coord{ 110, 31 }, coord{ 112, 31 }, coord{ 3, 40 }, coord{ 20, 41 }, coord{ 28, 36 }, coord{ 38, 35 }, coord{ 52, 44 }, coord{ 57, 44 }, coord{ 72, 43 }, coord{ 83, 35 }, coord{ 98, 35 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 22, 54 }, coord{ 24, 55 }, coord{ 44, 48 }, coord{ 54, 51 }, coord{ 62, 52 }, coord{ 73, 54 }, coord{ 82, 54 }, coord{ 98, 54 }, coord{ 109, 55 }, coord{ 115, 50 }, coord{ 10, 62 }, coord{ 22, 57 }, coord{ 24, 57 }, coord{ 41, 64 }, coord{ 55, 61 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 84, 63 }, coord{ 91, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 11, 71 }, coord{ 22, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 63, 72 }, coord{ 68, 73 }, coord{ 87, 75 }, coord{ 94, 77 }, coord{ 101, 74 }, coord{ 118, 71 }, coord{ 9, 85 }, coord{ 19, 88 }, coord{ 31, 88 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 80 }, coord{ 77, 85 }, coord{ 87, 80 }, coord{ 97, 84 }, coord{ 104, 79 }, coord{ 121, 82 }, coord{ 2, 97 }, coord{ 22, 92 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 91 }, coord{ 71, 99 }, coord{ 79, 90 }, coord{ 97, 98 }, coord{ 108, 99 }, coord{ 121, 98 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 104 }, coord{ 36, 105 }, coord{ 55, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 93, 102 }, coord{ 110, 102 }, coord{ 112, 106 }, coord{ 3, 120 }, coord{ 20, 119 }, coord{ 26, 114 }, coord{ 35, 112 }, coord{ 50, 114 }, coord{ 63, 117 }, coord{ 76, 118 }, coord{ 79, 116 }, coord{ 99, 119 }, coord{ 105, 112 }, coord{ 120, 113 }, coord{ 3, 132 }, coord{ 15, 127 }, coord{ 31, 132 }, coord{ 44, 130 }, coord{ 49, 131 }, coord{ 64, 128 }, coord{ 69, 128 }, coord{ 79, 128 }, coord{ 94, 128 }, coord{ 104, 131 }, coord{ 120, 129 }, coord{ 5, 135 }, coord{ 16, 142 }, coord{ 27, 134 }, coord{ 39, 134 }, coord{ 53, 138 }, coord{ 57, 136 }, coord{ 69, 136 }, coord{ 83, 143 }, coord{ 99, 135 }, coord{ 104, 136 }, coord{ 119, 137 }, coord{ 4, 153 }, coord{ 22, 146 }, coord{ 28, 147 }, coord{ 44, 145 }, coord{ 54, 153 }, coord{ 64, 152 }, coord{ 74, 153 }, coord{ 88, 154 }, coord{ 98, 154 }, coord{ 110, 154 }, coord{ 118, 153 }, coord{ 10, 164 }, coord{ 22, 161 }, coord{ 28, 163 }, coord{ 44, 165 }, coord{ 48, 165 }, coord{ 58, 161 }, coord{ 68, 159 }, coord{ 82, 156 }, coord{ 98, 157 }, coord{ 110, 157 }, coord{ 118, 159 }, coord{ 8, 176 }, coord{ 15, 176 }, coord{ 25, 175 }, coord{ 44, 168 }, coord{ 52, 167 }, coord{ 62, 167 }, coord{ 68, 168 }, coord{ 79, 170 }, coord{ 98, 172 }, coord{ 104, 174 }, coord{ 114, 174 }, coord{ 5, 180 }, coord{ 22, 183 }, coord{ 25, 182 }, coord{ 37, 183 }, coord{ 55, 183 }, coord{ 61, 183 }, coord{ 73, 181 }, coord{ 79, 183 }, coord{ 95, 183 }, coord{ 107, 186 }, coord{ 119, 187 }, coord{ 8, 193 }, coord{ 16, 191 }, coord{ 31, 191 }, coord{ 44, 191 }, coord{ 48, 195 }, coord{ 61, 193 }, coord{ 70, 189 }, coord{ 80, 190 }, coord{ 96, 190 }, coord{ 106, 191 }, coord{ 115, 190 }, coord{ 10, 202 }, coord{ 16, 209 }, coord{ 28, 204 }, coord{ 44, 202 }, coord{ 50, 207 }, coord{ 66, 203 }, coord{ 76, 200 }, coord{ 86, 203 }, coord{ 90, 207 }, coord{ 106, 200 }, coord{ 118, 209 }, coord{ 8, 218 }, coord{ 16, 218 }, coord{ 26, 214 }, coord{ 36, 216 }, coord{ 48, 218 }, coord{ 62, 220 }, coord{ 74, 215 }, coord{ 86, 218 }, coord{ 90, 213 }, coord{ 110, 211 }, coord{ 118, 216 }, coord{ 2, 226 }, coord{ 22, 223 }, coord{ 30, 228 }, coord{ 44, 226 }, coord{ 50, 230 }, coord{ 66, 229 }, coord{ 72, 227 }, coord{ 80, 226 }, coord{ 98, 224 }, coord{ 110, 224 }, coord{ 114, 224 }, coord{ 10, 236 }, coord{ 20, 235 }, coord{ 26, 240 }, coord{ 38, 238 }, coord{ 48, 234 }, coord{ 66, 240 }, coord{ 74, 239 }, coord{ 86, 240 }, coord{ 98, 241 }, coord{ 104, 239 }, coord{ 120, 234 }, coord{ 8, 244 }, coord{ 20, 244 }, coord{ 28, 251 }, coord{ 38, 244 }, coord{ 54, 244 }, coord{ 60, 245 }, coord{ 70, 247 }, coord{ 84, 248 }, coord{ 92, 250 }, coord{ 108, 251 }, coord{ 120, 252 }, coord{ 97, 198 }, coord{ 104, 198 }, coord{ 106, 198 }, coord{ 107, 198 }, coord{ 96, 198 }, coord{ 98, 198 }, coord{ 99, 198 }, coord{ 100, 198 }, coord{ 101, 198 }, coord{ 102, 198 }, coord{ 103, 198 }, coord{ 105, 198 }, coord{ 124, 193 }, coord{ 125, 193 }, coord{ 126, 193 }, coord{ 127, 193 }, coord{ 120, 193 }, coord{ 121, 193 }, coord{ 122, 193 }, coord{ 123, 193 }, coord{ 117, 193 }, coord{ 12, 225 }, coord{ 113, 193 }, coord{ 119, 193 }, coord{ 112, 193 }, coord{ 118, 193 }, coord{ 114, 193 }, coord{ 116, 193 }, coord{ 115, 193 }, coord{ 116, 197 }, coord{ 117, 197 }, coord{ 120, 196 }, coord{ 121, 196 }, coord{ 124, 196 }, coord{ 125, 196 }, coord{ 126, 196 }, coord{ 127, 196 }, coord{ 112, 197 }, coord{ 113, 197 }, coord{ 118, 197 }, coord{ 119, 197 }, coord{ 120, 197 }, coord{ 121, 197 }, coord{ 197, 124 } };
 
-coord high_var_block128_collision44[165] = { coord{ 4, 7 }, coord{ 15, 8 }, coord{ 24, 8 }, coord{ 39, 6 }, coord{ 55, 2 }, coord{ 57, 2 }, coord{ 72, 8 }, coord{ 84, 3 }, coord{ 90, 9 }, coord{ 103, 5 }, coord{ 121, 2 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 28, 14 }, coord{ 44, 16 }, coord{ 54, 21 }, coord{ 58, 22 }, coord{ 72, 13 }, coord{ 82, 13 }, coord{ 98, 18 }, coord{ 103, 17 }, coord{ 117, 18 }, coord{ 4, 28 }, coord{ 18, 24 }, coord{ 31, 31 }, coord{ 35, 28 }, coord{ 55, 31 }, coord{ 61, 26 }, coord{ 73, 32 }, coord{ 87, 33 }, coord{ 94, 30 }, coord{ 108, 24 }, coord{ 112, 31 }, coord{ 7, 40 }, coord{ 14, 39 }, coord{ 31, 35 }, coord{ 35, 35 }, coord{ 49, 44 }, coord{ 61, 36 }, coord{ 77, 35 }, coord{ 83, 35 }, coord{ 95, 38 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 15, 49 }, coord{ 25, 55 }, coord{ 44, 48 }, coord{ 47, 49 }, coord{ 61, 55 }, coord{ 77, 49 }, coord{ 81, 48 }, coord{ 90, 48 }, coord{ 104, 55 }, coord{ 114, 46 }, coord{ 10, 61 }, coord{ 16, 57 }, coord{ 31, 59 }, coord{ 41, 64 }, coord{ 47, 64 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 85, 63 }, coord{ 95, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 7, 74 }, coord{ 21, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 62, 69 }, coord{ 72, 68 }, coord{ 83, 74 }, coord{ 94, 77 }, coord{ 103, 77 }, coord{ 118, 77 }, coord{ 2, 85 }, coord{ 20, 85 }, coord{ 29, 81 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 79 }, coord{ 77, 87 }, coord{ 88, 83 }, coord{ 97, 84 }, coord{ 105, 79 }, coord{ 113, 88 }, coord{ 7, 94 }, coord{ 18, 98 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 98 }, coord{ 71, 99 }, coord{ 80, 98 }, coord{ 97, 97 }, coord{ 108, 99 }, coord{ 113, 95 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 101 }, coord{ 35, 102 }, coord{ 51, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 95, 101 }, coord{ 108, 101 }, coord{ 112, 104 }, coord{ 11, 116 }, coord{ 13, 118 }, coord{ 27, 120 }, coord{ 37, 121 }, coord{ 52, 113 }, coord{ 59, 121 }, coord{ 77, 115 }, coord{ 85, 112 }, coord{ 93, 112 }, coord{ 104, 112 }, coord{ 115, 112 }, coord{ 127, 127 }, coord{ 127, 126 }, coord{ 16, 45 }, coord{ 18, 44 }, coord{ 118, 85 }, coord{ 18, 42 }, coord{ 20, 45 }, coord{ 36, 45 }, coord{ 124, 80 }, coord{ 119, 84 }, coord{ 124, 84 }, coord{ 119, 85 }, coord{ 119, 86 }, coord{ 120, 86 }, coord{ 119, 89 }, coord{ 8, 33 }, coord{ 18, 43 }, coord{ 19, 43 }, coord{ 17, 44 }, coord{ 19, 44 }, coord{ 20, 44 }, coord{ 37, 44 }, coord{ 9, 45 }, coord{ 21, 45 }, coord{ 26, 45 }, coord{ 27, 45 }, coord{ 28, 45 }, coord{ 29, 45 }, coord{ 30, 45 }, coord{ 31, 45 }, coord{ 32, 45 }, coord{ 33, 45 }, coord{ 34, 45 }, coord{ 35, 45 }, coord{ 38, 45 }, coord{ 120, 89 }, coord{ 121, 89 }, coord{ 106, 90 }, coord{ 99, 93 }, coord{ 100, 93 }, coord{ 68, 110 }, coord{ 61, 117 }, coord{ 77, 117 }, coord{ 93, 5 } };
+//coord high_var_block128_collision44[165] = { coord{ 4, 7 }, coord{ 15, 8 }, coord{ 24, 8 }, coord{ 39, 6 }, coord{ 55, 2 }, coord{ 57, 2 }, coord{ 72, 8 }, coord{ 84, 3 }, coord{ 90, 9 }, coord{ 103, 5 }, coord{ 121, 2 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 28, 14 }, coord{ 44, 16 }, coord{ 54, 21 }, coord{ 58, 22 }, coord{ 72, 13 }, coord{ 82, 13 }, coord{ 98, 18 }, coord{ 103, 17 }, coord{ 117, 18 }, coord{ 4, 28 }, coord{ 18, 24 }, coord{ 31, 31 }, coord{ 35, 28 }, coord{ 55, 31 }, coord{ 61, 26 }, coord{ 73, 32 }, coord{ 87, 33 }, coord{ 94, 30 }, coord{ 108, 24 }, coord{ 112, 31 }, coord{ 7, 40 }, coord{ 14, 39 }, coord{ 31, 35 }, coord{ 35, 35 }, coord{ 49, 44 }, coord{ 61, 36 }, coord{ 77, 35 }, coord{ 83, 35 }, coord{ 95, 38 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 15, 49 }, coord{ 25, 55 }, coord{ 44, 48 }, coord{ 47, 49 }, coord{ 61, 55 }, coord{ 77, 49 }, coord{ 81, 48 }, coord{ 90, 48 }, coord{ 104, 55 }, coord{ 114, 46 }, coord{ 10, 61 }, coord{ 16, 57 }, coord{ 31, 59 }, coord{ 41, 64 }, coord{ 47, 64 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 85, 63 }, coord{ 95, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 7, 74 }, coord{ 21, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 62, 69 }, coord{ 72, 68 }, coord{ 83, 74 }, coord{ 94, 77 }, coord{ 103, 77 }, coord{ 118, 77 }, coord{ 2, 85 }, coord{ 20, 85 }, coord{ 29, 81 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 79 }, coord{ 77, 87 }, coord{ 88, 83 }, coord{ 97, 84 }, coord{ 105, 79 }, coord{ 113, 88 }, coord{ 7, 94 }, coord{ 18, 98 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 98 }, coord{ 71, 99 }, coord{ 80, 98 }, coord{ 97, 97 }, coord{ 108, 99 }, coord{ 113, 95 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 101 }, coord{ 35, 102 }, coord{ 51, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 95, 101 }, coord{ 108, 101 }, coord{ 112, 104 }, coord{ 11, 116 }, coord{ 13, 118 }, coord{ 27, 120 }, coord{ 37, 121 }, coord{ 52, 113 }, coord{ 59, 121 }, coord{ 77, 115 }, coord{ 85, 112 }, coord{ 93, 112 }, coord{ 104, 112 }, coord{ 115, 112 }, coord{ 127, 127 }, coord{ 127, 126 }, coord{ 16, 45 }, coord{ 18, 44 }, coord{ 118, 85 }, coord{ 18, 42 }, coord{ 20, 45 }, coord{ 36, 45 }, coord{ 124, 80 }, coord{ 119, 84 }, coord{ 124, 84 }, coord{ 119, 85 }, coord{ 119, 86 }, coord{ 120, 86 }, coord{ 119, 89 }, coord{ 8, 33 }, coord{ 18, 43 }, coord{ 19, 43 }, coord{ 17, 44 }, coord{ 19, 44 }, coord{ 20, 44 }, coord{ 37, 44 }, coord{ 9, 45 }, coord{ 21, 45 }, coord{ 26, 45 }, coord{ 27, 45 }, coord{ 28, 45 }, coord{ 29, 45 }, coord{ 30, 45 }, coord{ 31, 45 }, coord{ 32, 45 }, coord{ 33, 45 }, coord{ 34, 45 }, coord{ 35, 45 }, coord{ 38, 45 }, coord{ 120, 89 }, coord{ 121, 89 }, coord{ 106, 90 }, coord{ 99, 93 }, coord{ 100, 93 }, coord{ 68, 110 }, coord{ 61, 117 }, coord{ 77, 117 }, coord{ 93, 5 } };
 
-const int FNV_COORDS_LEN = 121;
-coord low_mode_block128[FNV_COORDS_LEN] = { coord{ 11, 9 }, coord{ 22, 7 }, coord{ 28, 7 }, coord{ 39, 9 }, coord{ 53, 9 }, coord{ 60, 7 }, coord{ 76, 11 }, coord{ 88, 8 }, coord{ 91, 11 }, coord{ 102, 7 }, coord{ 115, 9 }, coord{ 11, 15 }, coord{ 22, 19 }, coord{ 28, 20 }, coord{ 40, 22 }, coord{ 54, 16 }, coord{ 60, 17 }, coord{ 76, 17 }, coord{ 87, 20 }, coord{ 91, 20 }, coord{ 107, 20 }, coord{ 115, 13 }, coord{ 11, 24 }, coord{ 22, 29 }, coord{ 28, 30 }, coord{ 39, 29 }, coord{ 46, 30 }, coord{ 60, 30 }, coord{ 70, 30 }, coord{ 87, 25 }, coord{ 93, 25 }, coord{ 102, 27 }, coord{ 115, 33 }, coord{ 11, 38 }, coord{ 22, 39 }, coord{ 28, 44 }, coord{ 39, 41 }, coord{ 55, 35 }, coord{ 60, 38 }, coord{ 70, 40 }, coord{ 87, 37 }, coord{ 99, 44 }, coord{ 102, 43 }, coord{ 115, 35 }, coord{ 11, 50 }, coord{ 21, 46 }, coord{ 25, 51 }, coord{ 40, 48 }, coord{ 46, 46 }, coord{ 60, 46 }, coord{ 76, 47 }, coord{ 87, 47 }, coord{ 93, 49 }, coord{ 107, 53 }, coord{ 115, 49 }, coord{ 11, 61 }, coord{ 22, 59 }, coord{ 25, 59 }, coord{ 40, 59 }, coord{ 55, 57 }, coord{ 60, 61 }, coord{ 70, 58 }, coord{ 87, 59 }, coord{ 99, 58 }, coord{ 102, 59 }, coord{ 115, 57 }, coord{ 7, 77 }, coord{ 21, 77 }, coord{ 24, 71 }, coord{ 36, 77 }, coord{ 46, 76 }, coord{ 60, 77 }, coord{ 70, 70 }, coord{ 87, 71 }, coord{ 93, 77 }, coord{ 102, 69 }, coord{ 115, 77 }, coord{ 11, 84 }, coord{ 21, 80 }, coord{ 27, 85 }, coord{ 39, 79 }, coord{ 55, 85 }, coord{ 60, 81 }, coord{ 75, 86 }, coord{ 82, 84 }, coord{ 93, 84 }, coord{ 107, 79 }, coord{ 115, 79 }, coord{ 11, 92 }, coord{ 22, 97 }, coord{ 28, 90 }, coord{ 40, 93 }, coord{ 46, 92 }, coord{ 60, 91 }, coord{ 76, 97 }, coord{ 82, 98 }, coord{ 93, 90 }, coord{ 102, 99 }, coord{ 115, 99 }, coord{ 6, 107 }, coord{ 22, 101 }, coord{ 31, 102 }, coord{ 41, 108 }, coord{ 55, 107 }, coord{ 60, 107 }, coord{ 70, 104 }, coord{ 87, 101 }, coord{ 93, 105 }, coord{ 102, 101 }, coord{ 115, 109 }, coord{ 11, 112 }, coord{ 21, 112 }, coord{ 27, 113 }, coord{ 41, 112 }, coord{ 55, 113 }, coord{ 60, 120 }, coord{ 70, 116 }, coord{ 82, 112 }, coord{ 93, 113 }, coord{ 107, 117 }, coord{ 115, 113 } };
+// low_mode_block128
+//const int FNV_COORDS_LEN = 121;
+//coord FNV_COORDS[FNV_COORDS_LEN] = { coord{ 11, 9 }, coord{ 22, 7 }, coord{ 28, 7 }, coord{ 39, 9 }, coord{ 53, 9 }, coord{ 60, 7 }, coord{ 76, 11 }, coord{ 88, 8 }, coord{ 91, 11 }, coord{ 102, 7 }, coord{ 115, 9 }, coord{ 11, 15 }, coord{ 22, 19 }, coord{ 28, 20 }, coord{ 40, 22 }, coord{ 54, 16 }, coord{ 60, 17 }, coord{ 76, 17 }, coord{ 87, 20 }, coord{ 91, 20 }, coord{ 107, 20 }, coord{ 115, 13 }, coord{ 11, 24 }, coord{ 22, 29 }, coord{ 28, 30 }, coord{ 39, 29 }, coord{ 46, 30 }, coord{ 60, 30 }, coord{ 70, 30 }, coord{ 87, 25 }, coord{ 93, 25 }, coord{ 102, 27 }, coord{ 115, 33 }, coord{ 11, 38 }, coord{ 22, 39 }, coord{ 28, 44 }, coord{ 39, 41 }, coord{ 55, 35 }, coord{ 60, 38 }, coord{ 70, 40 }, coord{ 87, 37 }, coord{ 99, 44 }, coord{ 102, 43 }, coord{ 115, 35 }, coord{ 11, 50 }, coord{ 21, 46 }, coord{ 25, 51 }, coord{ 40, 48 }, coord{ 46, 46 }, coord{ 60, 46 }, coord{ 76, 47 }, coord{ 87, 47 }, coord{ 93, 49 }, coord{ 107, 53 }, coord{ 115, 49 }, coord{ 11, 61 }, coord{ 22, 59 }, coord{ 25, 59 }, coord{ 40, 59 }, coord{ 55, 57 }, coord{ 60, 61 }, coord{ 70, 58 }, coord{ 87, 59 }, coord{ 99, 58 }, coord{ 102, 59 }, coord{ 115, 57 }, coord{ 7, 77 }, coord{ 21, 77 }, coord{ 24, 71 }, coord{ 36, 77 }, coord{ 46, 76 }, coord{ 60, 77 }, coord{ 70, 70 }, coord{ 87, 71 }, coord{ 93, 77 }, coord{ 102, 69 }, coord{ 115, 77 }, coord{ 11, 84 }, coord{ 21, 80 }, coord{ 27, 85 }, coord{ 39, 79 }, coord{ 55, 85 }, coord{ 60, 81 }, coord{ 75, 86 }, coord{ 82, 84 }, coord{ 93, 84 }, coord{ 107, 79 }, coord{ 115, 79 }, coord{ 11, 92 }, coord{ 22, 97 }, coord{ 28, 90 }, coord{ 40, 93 }, coord{ 46, 92 }, coord{ 60, 91 }, coord{ 76, 97 }, coord{ 82, 98 }, coord{ 93, 90 }, coord{ 102, 99 }, coord{ 115, 99 }, coord{ 6, 107 }, coord{ 22, 101 }, coord{ 31, 102 }, coord{ 41, 108 }, coord{ 55, 107 }, coord{ 60, 107 }, coord{ 70, 104 }, coord{ 87, 101 }, coord{ 93, 105 }, coord{ 102, 101 }, coord{ 115, 109 }, coord{ 11, 112 }, coord{ 21, 112 }, coord{ 27, 113 }, coord{ 41, 112 }, coord{ 55, 113 }, coord{ 60, 120 }, coord{ 70, 116 }, coord{ 82, 112 }, coord{ 93, 113 }, coord{ 107, 117 }, coord{ 115, 113 } };
+
+// low_mode_prog_collisions
+const int FNV_COORDS_LEN = 500;
+coord FNV_COORDS[FNV_COORDS_LEN] = { coord{ 38, 36, 0 }, coord{ 36, 35, 0 }, coord{ 41, 37, 0 }, coord{ 28, 12, 0 }, coord{ 18, 8, 0 }, coord{ 12, 10, 0 }, coord{ 19, 8, 0 }, coord{ 33, 102, 0 }, coord{ 20, 18, 0 }, coord{ 4, 27, 0 }, coord{ 17, 8, 0 }, coord{ 10, 105, 0 }, coord{ 12, 39, 0 }, coord{ 17, 5, 0 }, coord{ 19, 7, 0 }, coord{ 16, 8, 0 }, coord{ 17, 9, 0 }, coord{ 16, 9, 0 }, coord{ 39, 7, 0 }, coord{ 18, 10, 0 }, coord{ 12, 37, 0 }, coord{ 19, 9, 0 }, coord{ 3, 15, 0 }, coord{ 18, 9, 0 }, coord{ 5, 18, 0 }, coord{ 19, 6, 0 }, coord{ 42, 36, 0 }, coord{ 4, 16, 0 }, coord{ 20, 27, 0 }, coord{ 18, 5, 0 }, coord{ 3, 16, 0 }, coord{ 2, 7, 0 }, coord{ 0, 22, 0 }, coord{ 23, 9, 0 }, coord{ 19, 15, 0 }, coord{ 4, 49, 0 }, coord{ 9, 54, 0 }, coord{ 33, 56, 0 }, coord{ 13, 59, 0 }, coord{ 33, 58, 0 }, coord{ 18, 7, 0 }, coord{ 13, 102, 0 }, coord{ 10, 104, 0 }, coord{ 11, 7, 0 }, coord{ 16, 11, 0 }, coord{ 18, 4, 0 }, coord{ 12, 8, 0 }, coord{ 10, 103, 0 }, coord{ 11, 39, 0 }, coord{ 16, 6, 0 }, coord{ 13, 9, 0 }, coord{ 17, 10, 0 }, coord{ 35, 36, 0 }, coord{ 41, 51, 0 }, coord{ 20, 8, 0 }, coord{ 13, 17, 0 }, coord{ 39, 56, 0 }, coord{ 22, 10, 0 }, coord{ 41, 57, 0 }, coord{ 15, 9, 0 }, coord{ 17, 6, 0 }, coord{ 40, 9, 0 }, coord{ 38, 39, 0 }, coord{ 83, 5, 0 }, coord{ 39, 9, 0 }, coord{ 20, 9, 0 }, coord{ 21, 9, 0 }, coord{ 23, 10, 0 }, coord{ 11, 16, 0 }, coord{ 2, 3, 0 }, coord{ 41, 40, 0 }, coord{ 16, 49, 0 }, coord{ 23, 7, 0 }, coord{ 17, 4, 0 }, coord{ 19, 53, 0 }, coord{ 34, 58, 0 }, coord{ 19, 16, 0 }, coord{ 35, 49, 0 }, coord{ 16, 72, 0 }, coord{ 10, 108, 0 }, coord{ 10, 109, 0 }, coord{ 12, 104, 0 }, coord{ 12, 100, 0 }, coord{ 11, 105, 0 }, coord{ 2, 83, 0 }, coord{ 11, 104, 0 }, coord{ 11, 103, 0 }, coord{ 11, 108, 0 }, coord{ 36, 100, 0 }, coord{ 2, 49, 0 }, coord{ 10, 107, 0 }, coord{ 40, 48, 0 }, coord{ 37, 54, 0 }, coord{ 37, 55, 0 }, coord{ 39, 57, 0 }, coord{ 82, 74, 0 }, coord{ 11, 110, 0 }, coord{ 4, 40, 0 }, coord{ 2, 4, 0 }, coord{ 4, 2, 0 }, coord{ 2, 6, 0 }, coord{ 12, 107, 0 }, coord{ 16, 5, 0 }, coord{ 35, 35, 0 }, coord{ 2, 1, 0 }, coord{ 12, 9, 0 }, coord{ 33, 57, 0 }, coord{ 38, 101, 0 }, coord{ 4, 5, 0 }, coord{ 3, 19, 0 }, coord{ 4, 19, 0 }, coord{ 4, 34, 0 }, coord{ 6, 41, 0 }, coord{ 41, 36, 0 }, coord{ 41, 56, 0 }, coord{ 32, 57, 0 }, coord{ 11, 102, 0 }, coord{ 35, 102, 0 }, coord{ 4, 105, 0 }, coord{ 11, 109, 0 }, coord{ 35, 48, 0 }, coord{ 18, 105, 0 }, coord{ 4, 0, 0 }, coord{ 39, 38, 0 }, coord{ 42, 38, 0 }, coord{ 38, 46, 0 }, coord{ 34, 59, 0 }, coord{ 4, 107, 0 }, coord{ 16, 108, 0 }, coord{ 36, 45, 0 }, coord{ 1, 7, 0 }, coord{ 7, 37, 0 }, coord{ 2, 5, 0 }, coord{ 3, 17, 0 }, coord{ 6, 39, 0 }, coord{ 36, 0, 0 }, coord{ 3, 6, 0 }, coord{ 14, 10, 0 }, coord{ 5, 16, 0 }, coord{ 4, 17, 0 }, coord{ 6, 33, 0 }, coord{ 10, 50, 0 }, coord{ 5, 17, 0 }, coord{ 34, 37, 0 }, coord{ 17, 69, 0 }, coord{ 36, 34, 0 }, coord{ 40, 49, 0 }, coord{ 4, 48, 0 }, coord{ 41, 49, 0 }, coord{ 2, 24, 0 }, coord{ 10, 35, 0 }, coord{ 41, 50, 0 }, coord{ 35, 58, 0 }, coord{ 12, 103, 0 }, coord{ 36, 103, 0 }, coord{ 13, 5, 0 }, coord{ 13, 10, 0 }, coord{ 4, 13, 0 }, coord{ 8, 18, 0 }, coord{ 36, 49, 0 }, coord{ 37, 51, 0 }, coord{ 35, 37, 0 }, coord{ 43, 37, 0 }, coord{ 4, 50, 0 }, coord{ 39, 50, 0 }, coord{ 33, 6, 0 }, coord{ 41, 39, 0 }, coord{ 43, 40, 0 }, coord{ 42, 44, 0 }, coord{ 39, 49, 0 }, coord{ 38, 50, 0 }, coord{ 17, 51, 0 }, coord{ 40, 41, 0 }, coord{ 35, 59, 0 }, coord{ 35, 103, 0 }, coord{ 9, 7, 0 }, coord{ 14, 18, 0 }, coord{ 43, 36, 0 }, coord{ 42, 45, 0 }, coord{ 10, 51, 0 }, coord{ 19, 51, 0 }, coord{ 35, 51, 0 }, coord{ 39, 51, 0 }, coord{ 41, 55, 0 }, coord{ 12, 66, 0 }, coord{ 11, 40, 0 }, coord{ 12, 71, 0 }, coord{ 11, 107, 0 }, coord{ 16, 112, 0 }, coord{ 43, 56, 0 }, coord{ 36, 7, 0 }, coord{ 11, 53, 0 }, coord{ 38, 56, 0 }, coord{ 80, 74, 0 }, coord{ 82, 75, 0 }, coord{ 35, 13, 0 }, coord{ 13, 67, 0 }, coord{ 10, 113, 0 }, coord{ 38, 48, 0 }, coord{ 43, 52, 0 }, coord{ 35, 55, 0 }, coord{ 36, 59, 0 }, coord{ 18, 67, 0 }, coord{ 70, 1, 0 }, coord{ 20, 4, 0 }, coord{ 15, 5, 0 }, coord{ 13, 7, 0 }, coord{ 36, 13, 0 }, coord{ 34, 14, 0 }, coord{ 40, 37, 0 }, coord{ 27, 49, 0 }, coord{ 17, 54, 0 }, coord{ 12, 108, 0 }, coord{ 12, 110, 0 }, coord{ 13, 110, 0 }, coord{ 17, 50, 0 }, coord{ 13, 108, 0 }, coord{ 12, 113, 0 }, coord{ 39, 5, 0 }, coord{ 38, 34, 0 }, coord{ 40, 38, 0 }, coord{ 41, 38, 0 }, coord{ 39, 40, 0 }, coord{ 4, 52, 0 }, coord{ 11, 56, 0 }, coord{ 12, 70, 0 }, coord{ 4, 42, 0 }, coord{ 42, 51, 0 }, coord{ 18, 103, 0 }, coord{ 17, 7, 0 }, coord{ 43, 39, 0 }, coord{ 16, 102, 0 }, coord{ 4, 14, 0 }, coord{ 14, 16, 0 }, coord{ 4, 21, 0 }, coord{ 18, 41, 0 }, coord{ 43, 41, 0 }, coord{ 39, 53, 0 }, coord{ 39, 54, 0 }, coord{ 41, 54, 0 }, coord{ 43, 54, 0 }, coord{ 39, 55, 0 }, coord{ 12, 57, 0 }, coord{ 43, 57, 0 }, coord{ 39, 58, 0 }, coord{ 18, 70, 0 }, coord{ 81, 75, 0 }, coord{ 13, 105, 0 }, coord{ 14, 105, 0 }, coord{ 10, 106, 0 }, coord{ 10, 110, 0 }, coord{ 14, 111, 0 }, coord{ 21, 5, 0 }, coord{ 18, 6, 0 }, coord{ 30, 9, 0 }, coord{ 85, 10, 0 }, coord{ 8, 26, 0 }, coord{ 80, 75, 0 }, coord{ 98, 4, 0 }, coord{ 14, 81, 0 }, coord{ 17, 56, 0 }, coord{ 13, 107, 0 }, coord{ 12, 111, 0 }, coord{ 40, 8, 0 }, coord{ 38, 45, 0 }, coord{ 25, 48, 0 }, coord{ 10, 49, 0 }, coord{ 17, 49, 0 }, coord{ 19, 49, 0 }, coord{ 40, 50, 0 }, coord{ 38, 51, 0 }, coord{ 10, 52, 0 }, coord{ 41, 53, 0 }, coord{ 35, 56, 0 }, coord{ 69, 56, 0 }, coord{ 10, 111, 0 }, coord{ 41, 112, 0 }, coord{ 16, 114, 0 }, coord{ 43, 38, 0 }, coord{ 41, 48, 0 }, coord{ 14, 17, 0 }, coord{ 9, 18, 0 }, coord{ 40, 36, 0 }, coord{ 39, 39, 0 }, coord{ 41, 41, 0 }, coord{ 39, 42, 0 }, coord{ 27, 50, 0 }, coord{ 27, 51, 0 }, coord{ 42, 57, 0 }, coord{ 99, 8, 0 }, coord{ 18, 107, 0 }, coord{ 83, 11, 0 }, coord{ 27, 15, 0 }, coord{ 26, 20, 0 }, coord{ 20, 35, 0 }, coord{ 42, 39, 0 }, coord{ 106, 40, 0 }, coord{ 16, 41, 0 }, coord{ 38, 43, 0 }, coord{ 38, 44, 0 }, coord{ 99, 2, 0 }, coord{ 51, 9, 0 }, coord{ 22, 18, 0 }, coord{ 38, 33, 0 }, coord{ 41, 42, 0 }, coord{ 17, 100, 0 }, coord{ 27, 16, 0 }, coord{ 7, 17, 0 }, coord{ 28, 18, 0 }, coord{ 19, 52, 0 }, coord{ 38, 55, 0 }, coord{ 65, 56, 0 }, coord{ 41, 58, 0 }, coord{ 99, 10, 0 }, coord{ 39, 11, 0 }, coord{ 17, 48, 0 }, coord{ 12, 109, 0 }, coord{ 21, 6, 0 }, coord{ 41, 9, 0 }, coord{ 25, 16, 0 }, coord{ 27, 18, 0 }, coord{ 40, 46, 0 }, coord{ 19, 50, 0 }, coord{ 21, 51, 0 }, coord{ 17, 52, 0 }, coord{ 12, 59, 0 }, coord{ 11, 111, 0 }, coord{ 40, 112, 0 }, coord{ 11, 8, 0 }, coord{ 40, 10, 0 }, coord{ 51, 19, 0 }, coord{ 38, 42, 0 }, coord{ 36, 46, 0 }, coord{ 47, 51, 0 }, coord{ 43, 53, 0 }, coord{ 40, 56, 0 }, coord{ 40, 57, 0 }, coord{ 82, 67, 0 }, coord{ 18, 104, 0 }, coord{ 15, 7, 0 }, coord{ 20, 7, 0 }, coord{ 17, 11, 0 }, coord{ 21, 11, 0 }, coord{ 18, 13, 0 }, coord{ 40, 39, 0 }, coord{ 19, 48, 0 }, coord{ 42, 49, 0 }, coord{ 65, 55, 0 }, coord{ 65, 57, 0 }, coord{ 22, 69, 0 }, coord{ 17, 102, 0 }, coord{ 13, 103, 0 }, coord{ 13, 111, 0 }, coord{ 11, 112, 0 }, coord{ 41, 5, 0 }, coord{ 84, 5, 0 }, coord{ 13, 16, 0 }, coord{ 51, 20, 0 }, coord{ 20, 23, 0 }, coord{ 43, 7, 0 }, coord{ 30, 10, 0 }, coord{ 39, 10, 0 }, coord{ 13, 11, 0 }, coord{ 36, 15, 0 }, coord{ 15, 17, 0 }, coord{ 21, 17, 0 }, coord{ 8, 22, 0 }, coord{ 0, 24, 0 }, coord{ 39, 41, 0 }, coord{ 16, 47, 0 }, coord{ 19, 54, 0 }, coord{ 38, 54, 0 }, coord{ 65, 54, 0 }, coord{ 43, 58, 0 }, coord{ 12, 99, 0 }, coord{ 13, 109, 0 }, coord{ 21, 7, 0 }, coord{ 53, 9, 0 }, coord{ 87, 10, 0 }, coord{ 20, 11, 0 }, coord{ 21, 13, 0 }, coord{ 38, 14, 0 }, coord{ 10, 26, 0 }, coord{ 10, 27, 0 }, coord{ 4, 28, 0 }, coord{ 40, 33, 0 }, coord{ 16, 42, 0 }, coord{ 35, 45, 0 }, coord{ 36, 47, 0 }, coord{ 18, 48, 0 }, coord{ 18, 51, 0 }, coord{ 40, 52, 0 }, coord{ 42, 54, 0 }, coord{ 20, 56, 0 }, coord{ 23, 56, 0 }, coord{ 12, 58, 0 }, coord{ 38, 102, 0 }, coord{ 17, 104, 0 }, coord{ 18, 106, 0 }, coord{ 14, 109, 0 }, coord{ 18, 112, 0 }, coord{ 10, 114, 0 }, coord{ 98, 2, 0 }, coord{ 31, 6, 0 }, coord{ 40, 6, 0 }, coord{ 41, 7, 0 }, coord{ 9, 9, 0 }, coord{ 21, 10, 0 }, coord{ 23, 12, 0 }, coord{ 18, 16, 0 }, coord{ 31, 19, 0 }, coord{ 6, 23, 0 }, coord{ 107, 27, 0 }, coord{ 98, 11, 0 }, coord{ 36, 33, 0 }, coord{ 40, 40, 0 }, coord{ 36, 43, 0 }, coord{ 39, 44, 0 }, coord{ 51, 53, 0 }, coord{ 106, 54, 0 }, coord{ 34, 57, 0 }, coord{ 35, 104, 0 }, coord{ 36, 105, 0 }, coord{ 14, 7, 0 }, coord{ 31, 10, 0 }, coord{ 17, 13, 0 }, coord{ 22, 13, 0 }, coord{ 17, 16, 0 }, coord{ 12, 26, 0 }, coord{ 38, 41, 0 }, coord{ 18, 43, 0 }, coord{ 40, 53, 0 }, coord{ 40, 54, 0 }, coord{ 55, 54, 0 }, coord{ 22, 56, 0 }, coord{ 21, 57, 0 }, coord{ 52, 110, 0 }, coord{ 25, 50, 0 }, coord{ 18, 61, 0 }, coord{ 12, 112, 0 }, coord{ 41, 8, 0 }, coord{ 16, 27, 0 }, coord{ 102, 33, 0 }, coord{ 35, 34, 0 }, coord{ 40, 35, 0 }, coord{ 106, 41, 0 }, coord{ 40, 42, 0 }, coord{ 49, 48, 0 }, coord{ 46, 50, 0 }, coord{ 42, 55, 0 }, coord{ 42, 59, 0 }, coord{ 82, 68, 0 }, coord{ 102, 71, 0 }, coord{ 22, 12, 0 }, coord{ 17, 108, 0 }, coord{ 36, 14, 0 }, coord{ 21, 56, 0 }, coord{ 34, 81, 0 }, coord{ 53, 109, 0 }, coord{ 6, 112, 0 }, coord{ 14, 5, 0 }, coord{ 82, 26, 0 }, coord{ 38, 32, 0 }, coord{ 40, 58, 0 }, coord{ 37, 104, 0 }, coord{ 12, 19, 0 }, coord{ 7, 21, 0 }, coord{ 40, 34, 0 }, coord{ 39, 43, 0 }, coord{ 41, 43, 0 }, coord{ 43, 44, 0 }, coord{ 39, 45, 0 }, coord{ 46, 110, 0 }, coord{ 18, 111, 0 }, coord{ 19, 112, 0 }, coord{ 20, 112, 0 }, coord{ 37, 112, 0 }, coord{ 16, 2, 0 }, coord{ 6, 11, 0 }, coord{ 17, 15, 0 }, coord{ 25, 17, 0 }, coord{ 28, 17, 0 }, coord{ 24, 24, 0 }, coord{ 24, 27, 0 }, coord{ 21, 50, 0 }, coord{ 21, 52, 0 }, coord{ 21, 53, 0 }, coord{ 47, 57, 0 }, coord{ 100, 83, 0 }, coord{ 11, 113, 0 }, coord{ 18, 102, 0 }, coord{ 20, 102, 0 }, coord{ 31, 102, 0 }, coord{ 22, 11, 0 }, coord{ 13, 19, 0 }, coord{ 28, 19, 0 }, coord{ 12, 21, 0 }, coord{ 55, 22, 0 }, coord{ 9, 23, 0 }, coord{ 64, 24, 0 } };
 
 uint64 Hash_Algorithm_1(const cv::Mat& img)
 {
@@ -165,44 +216,36 @@ uint32 FNV_OFFSET_PRIME_32 = 16777619;
 //template<typename container>
 //typename boost::enable_if<boost::is_same<typename container::value_type, coord>, uint64>::type
 //FNV_Hash(const cv::Mat& img, container& coords, bool use_RGB = true)
-uint64 FNV_Hash_64(const cv::Mat& img, coord* coords, int len, bool use_RGB = true)
+uint64 FNV_Hash(const cv::Mat& img, coord* coords, int len, bool use_RGB = true)
 {
 	uint64 hash = FNV_OFFSET_BASIS_64;
 
-	float red = 0, green = 0, blue = 0;
 	size_t coord_count = 0;
 	coord* point = coords;
 	for (int i = 0; i < len; i++, point++) {
-		uchar val = 0;
+		uchar val = 0, red = 0, green = 0, blue = 0;
 		if (point->x < img.cols && point->y < img.rows) {
 			cv::Vec3b pixel = img.at<cv::Vec3b>(point->y, point->x);
-			val = round((pixel[0] + pixel[1] + pixel[2]) / 3);
-
-			// keep track of RGB sums of pixels
 			if (use_RGB) {
-				red += pixel[0];
-				green += pixel[1];
-				blue += pixel[2];
+				red = pixel[0];
+				green = pixel[1];
+				blue = pixel[2];
+			} else {
+				val = round((pixel[0] + pixel[1] + pixel[2]) / 3);
 			}
 		}
 
-		hash ^= val;
-		hash *= FNV_OFFSET_PRIME_64;
-		coord_count++;
-	}
-
-	// factor RGB averages into hash
-	if (use_RGB) {
-		red /= coord_count;
-		green /= coord_count;
-		blue /= coord_count;
-
-		hash ^= (uchar)red;
-		hash *= FNV_OFFSET_PRIME_64;
-		hash ^= (uchar)green;
-		hash *= FNV_OFFSET_PRIME_64;
-		hash ^= (uchar)blue;
-		hash *= FNV_OFFSET_PRIME_64;
+		if (use_RGB) {																// hash each R,G,B individually
+			hash ^= (uchar)red;
+			hash *= FNV_OFFSET_PRIME_64;
+			hash ^= (uchar)green;
+			hash *= FNV_OFFSET_PRIME_64;
+			hash ^= (uchar)blue;
+			hash *= FNV_OFFSET_PRIME_64;
+		} else {																	// hash RGB average
+			hash ^= val;
+			hash *= FNV_OFFSET_PRIME_64;
+		}
 	}
 
 	return hash;
@@ -219,33 +262,30 @@ uint64 FNV_Hash(const cv::Mat& img, deque<coord> coords, bool use_RGB = true)
 		uchar val = 0;
 		if (point.x < img.cols && point.y < img.rows) {
 			cv::Vec3b pixel = img.at<cv::Vec3b>(point.y, point.x);
-			val = round((pixel[0] + pixel[1] + pixel[2]) / 3);
-
-			// keep track of RGB sums of pixels
 			if (use_RGB) {
-				red += pixel[0];
-				green += pixel[1];
-				blue += pixel[2];
+				if (point.c != point.none) {
+					val = pixel[point.c];
+				} else {
+					red = pixel[0];
+					green = pixel[1];
+					blue = pixel[2];
+				}
+			} else {
+				val = round((pixel[0] + pixel[1] + pixel[2]) / 3);
 			}
 		}
 
-		hash ^= val;
-		hash *= FNV_OFFSET_PRIME_64;
-		coord_count++;
-	}
-
-	// factor RGB averages into hash
-	if (use_RGB) {
-		red /= coord_count;
-		green /= coord_count;
-		blue /= coord_count;
-
-		hash ^= (uchar)red;
-		hash *= FNV_OFFSET_PRIME_64;
-		hash ^= (uchar)green;
-		hash *= FNV_OFFSET_PRIME_64;
-		hash ^= (uchar)blue;
-		hash *= FNV_OFFSET_PRIME_64;
+		if (use_RGB && point.c == point.none) {										// hash each R,G,B individually
+			hash ^= (uchar)red;
+			hash *= FNV_OFFSET_PRIME_64;
+			hash ^= (uchar)green;
+			hash *= FNV_OFFSET_PRIME_64;
+			hash ^= (uchar)blue;
+			hash *= FNV_OFFSET_PRIME_64;
+		} else {																	// hash RGB average
+			hash ^= val;
+			hash *= FNV_OFFSET_PRIME_64;
+		}
 	}
 
 	return hash;
@@ -486,7 +526,7 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 	bool DO_LOW_MODE = true;
 	bool DO_COLANLYZ = false;
 
-	int LOW_MODE_COUNT	= 1000;
+	int LOW_MODE_COUNT	= 500;
 	int COLLIDE_COUNT	= 100;
 
 
@@ -654,57 +694,63 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 		hashmap.clear();
 		// init hashmap with all images colliding
 		for (int i = 0; i < images.size(); i++) hashmap[0].insert(i);
-		map<long, set<coord>> low_modes;
 
 		for (int i = 0; i < LOW_MODE_COUNT; i++) {
 			// populate low_modes map from collision images
-			// get counts for each pixel value at each coordinate
-			long* pixcounts = new long[DIM_Y * DIM_X * 256];
-			for (int y = 0; y < DIM_Y; y++) for (int x = 0; x < DIM_X; x++) for (int p = 0; p < 256; p++) pixcounts[y * DIM_X * 256 + x * 256 + p] = 0;	// initialize to 0
+			// get counts for each pixel RGB value at each coordinate
+			long* pixcounts = new long[DIM_Y * DIM_X * 3 * 256];
+			for (int y = 0; y < DIM_Y; y++)
+				for (int x = 0; x < DIM_X; x++)
+					for (int c = 0; c < 3; c++)
+						for (int p = 0; p < 256; p++) pixcounts[(y * DIM_X * 3 * 256) + (x * 3 * 256) + (c * 256) + p] = 0;	// initialize to 0
 
 			for (pair<uint64, set<int>> hashset : hashmap) {
-				if (hashset.second.size() < 2) continue;
+				if (hashset.second.size() < 2) continue;													// skip non-collisions
 
 				for (int index : hashset.second) {
 					cv::Mat img = images[index]->mat();
 					for (int y = 0; y < DIM_Y; y++) {
 						for (int x = 0; x < DIM_X; x++) {
 							cv::Vec3b pixel = (y < img.rows && x < img.cols) ? img.at<cv::Vec3b>(y, x) : cv::Vec3b(0, 0, 0);
-							uchar pixval = round((pixel[0] + pixel[1] + pixel[2]) / 3);
-							pixcounts[y * DIM_X * 256 + x * 256 + pixval]++;
+							for (int c = 0; c < 3; c++)
+								pixcounts[(y * DIM_X * 3 * 256) + (x * 3 * 256) + (c * 256) + pixel[c]]++;
 						}
 					}
 				}
 			}
 
-			// get pixcount modes and add to low_modes
-			low_modes.clear();
+			// find coord with lowest mode count
+			long lowmode = LONG_MAX;
+			coord nextcoord;
 			for (int y = 0; y < DIM_Y; y++) {
 				for (int x = 0; x < DIM_X; x++) {
-					low_modes[*max_element(pixcounts + y * DIM_X * 256 + x * 256, pixcounts + y * DIM_X * 256 + x * 256 + 255, isless<long, long>)].insert({ x, y });
+					for (int c = 0; c < 3; c++) {
+						coord newcoord(x, y, (coord::color)c);
+
+						// if coords already contains this pixel, skip it
+						bool contains = false;
+						deque<coord>::iterator iter = coords.begin();
+						for (; iter != coords.end() && !contains; iter++) {
+							if (*iter == newcoord)
+								contains = true;
+						}
+						if (contains) continue;
+
+						// else add coord to low_modes, mapped to its mode count
+						long mode = *max_element(pixcounts + (y * DIM_X * 3 * 256) + (x * 3 * 256) + (c * 256),
+							pixcounts + (y * DIM_X * 3 * 256) + (x * 3 * 256) + (c * 256) + 255);
+						if (mode < lowmode) {
+							lowmode = mode;
+							nextcoord = newcoord;
+						}
+					}
 				}
 			}
 
 			delete[] pixcounts;
 
 			// push first coord (which has lowest mode) from low_modes to coords
-			coord lowmode;
-			// if coords already contains lowmode, skip it
-			bool duplicate = true;
-			while (duplicate) {
-				lowmode = *(low_modes.begin()->second.begin());
-				duplicate = false;
-				deque<coord>::iterator iter = coords.begin();
-				for (; iter != coords.end() && !duplicate; iter++) {
-					if (iter->x == lowmode.x && iter->y == lowmode.y) {
-						low_modes.begin()->second.erase(low_modes.begin()->second.begin());
-						if (low_modes.begin()->second.empty())
-							low_modes.erase(low_modes.begin());
-						duplicate = true;
-					}
-				}
-			}
-			coords.push_back(lowmode);
+			coords.push_back(nextcoord);
 
 			if (i == LOW_MODE_COUNT) break;
 
@@ -724,7 +770,7 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 				collisions += hashset.second.size() - 1;
 			}
 
-			cout << "After lowmode coordinate " << i << " (" << lowmode.x << ", " << lowmode.y << "): " << collisions << endl;
+			cout << "After lowmode (" << lowmode << ") coordinate " << i << " " << nextcoord.string() << ": " << collisions << endl;
 		}
 
 		// write low mode count coordinates
@@ -756,15 +802,57 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 		collout.open((dest.parent_path() / "analysis_collisions.csv").string());
 		collisions = 0;
 		map<coord, int> collision_coords;
+		long total_differing = 0;
+		long total_difference = 0;
+		double avg_difference = 0;
 		for (pair<uint64, set<int>> hashset : hashmap) {
 			if (hashset.second.size() < 2) continue;
 
 			// write collisions to collout
 			collout << hashset.first;
-			for (int i : hashset.second)
+			for (int i : hashset.second) {
 				collout << "," << images[i]->path.stem().string() << " (" << FNV_Full(images[i]->mat()) << ")";
+			}
 			collout << endl;
+
+			set<int>::iterator iter2 = hashset.second.begin();
+			set<int>::iterator iter = hashset.second.begin();
+			set<int>::iterator end = hashset.second.end();
+			end--;
+			while (iter != end) {
+				iter2++;
+				cv::Mat img = images[*iter]->mat();
+				while (iter2 != hashset.second.end()) {
+					long differing = 0;
+					long difference = 0;
+					
+					cv::Mat img2 = images[*iter2++]->mat();
+					for (int y = 0; y < min(img.rows, img2.rows); y++) {
+						for (int x = 0; x < min(img.cols, img2.cols); x++) {
+							cv::Vec3b pixel = img.at<cv::Vec3b>(y, x);
+							cv::Vec3b pixel2 = img.at<cv::Vec3b>(y, x);
+							for (int c = 0; c < 3; c++) {
+								if (pixel[c] != pixel2[c]) {
+									differing++;
+									difference += abs(pixel[c] - pixel[c]);
+								}
+							}
+						}
+					}
+					cout << *iter << " vs " << *iter2 << ": " << differing <<
+						" differing pixels for a total of " << difference <<
+						" and an average difference of " << ((differing == 0) ? 0 : (((float)difference) / differing)) << endl;
+					total_differing += differing;
+					total_difference += difference;
+				}
+				iter2 = ++iter;
+			}
 		}
+		cout << "Differing Pixels: " << total_differing << endl;
+		cout << "Total Difference: " << total_difference << endl;
+		cout << "Average Difference: " << (((float)total_difference) / total_differing) << endl;
+		cout << "Differing/Collision: " << (((float)total_differing) / collisions) << endl;
+		cout << "Difference/Collision: " << (((float)total_difference) / collisions) << endl;
 	}
 
 	if (DO_COLANLYZ) {
@@ -856,6 +944,107 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 	delete[] mean;
 	delete[] var;
 	delete[] mode_count;
+}
+
+
+void Analyze_Collisions(fs::path analysis, fs::path dest)
+{
+	cout << "Running Collision Analysis..." << endl;
+	cout << "Reading images...";
+
+	deque<image*> images;
+	unordered_set<uint64> image_hashes;
+	get_images(analysis, images, image_hashes);
+
+	cout << " found " << images.size() << " images." << endl;
+
+	map<uint64, set<int>> hashmap;
+	clock_t start_time, end_time, total_time;
+	double avg_time;
+	int collisions = 0;
+
+	total_time = 0;
+	for (int i = 0; i < images.size(); i++) {
+		cv::Mat img = images[i]->mat();
+		uint64 hash;
+
+		start_time = clock();
+		hash = FNV_Hash(img, FNV_COORDS, FNV_COORDS_LEN);
+		end_time = clock();
+		total_time += end_time - start_time;
+		hashmap[hash].insert(i);
+	}
+	avg_time = ((double)total_time) / images.size();
+
+	// find the differing coordinates in images with hash collisions
+	ofstream collout;
+	collout.open(dest.string());
+	collisions = 0;
+	map<coord, int> collision_coords;
+	long total_differing = 0;
+	long total_difference = 0;
+	for (pair<uint64, set<int>> hashset : hashmap) {
+		if (hashset.second.size() < 2) continue;
+		collisions += hashset.second.size();
+
+		// write collisions to collout
+		collout << hashset.first;
+		for (int i : hashset.second) {
+			collout << "," << i << " - " << images[i]->path.stem().string() << " (" << FNV_Full(images[i]->mat()) << ")";
+		}
+		collout << endl;
+
+		set<int>::iterator iter2 = hashset.second.begin();
+		set<int>::iterator iter = hashset.second.begin();
+		set<int>::iterator end = hashset.second.end();
+		end--;
+		while (iter != end) {
+			iter2++;
+			cv::Mat img = images[*iter]->mat();
+			while (iter2 != hashset.second.end()) {
+				long differing = 0;
+				long difference = 0;
+
+				cv::Mat img2 = images[*iter2]->mat();
+				for (int y = 0; y < min(img.rows, img2.rows); y++) {
+					for (int x = 0; x < min(img.cols, img2.cols); x++) {
+						cv::Vec3b pixel = img.at<cv::Vec3b>(y, x);
+						cv::Vec3b pixel2 = img2.at<cv::Vec3b>(y, x);
+						for (int c = 0; c < 3; c++) {
+							if (pixel[c] != pixel2[c]) {
+								differing++;
+								difference += abs(pixel[c] - pixel2[c]);
+							}
+						}
+					}
+				}
+
+				if (differing == 0) {
+					if (hashset.second.size() == 2)
+						collisions--;
+					collisions--;
+				} else {
+					stringstream ss;
+					ss << *iter << " vs " << *iter2 << ": " << differing <<
+						" differing pixels for a total of " << difference <<
+						" and an average difference of " << ((differing == 0) ? 0 : ((double)difference) / differing);
+					cout << ss.str() << endl;
+					collout << ss.str() << endl;
+					total_differing += differing;
+					total_difference += difference;
+				}
+				iter2++;
+			}
+			collout << endl;
+			iter2 = ++iter;
+		}
+	}
+	cout << "Low-Mode (" << FNV_COORDS_LEN << "):  " << images.size() << " images; " << collisions << " collisions; ~" << avg_time << " ms per image" << endl;
+	cout << "Differing Pixels: " << total_differing << endl;
+	cout << "Total Difference: " << total_difference << endl;
+	cout << "Average Difference: " << ((total_differing == 0) ? 0 : (((double)total_difference) / total_differing)) << endl;
+	cout << "Differing/Collision: " << ((collisions == 0) ? 0 : (((double)total_differing) / collisions)) << endl;
+	cout << "Difference/Collision: " << ((collisions == 0) ? 0 : (((double)total_difference) / collisions)) << endl;
 }
 
 
@@ -1162,7 +1351,7 @@ void Create_Hashmap(fs::path texture_dir, fs::path output_dir, bool append = fal
 		} else if (fs::is_regular_file(path) && boost::iequals(path.extension().string(), ".bmp")) {
 			cv::Mat img = cv::imread(path.string(), CV_LOAD_IMAGE_COLOR);
 			uint64 hash_combined, hash_upper, hash_lower;
-			hash_combined = FNV_Hash_Combined_64(img, hash_upper, hash_lower, low_mode_block128, FNV_COORDS_LEN, true);
+			hash_combined = FNV_Hash_Combined_64(img, hash_upper, hash_lower, FNV_COORDS, FNV_COORDS_LEN, true);
 			out << path.stem().string() << "," << hash_combined << "," << hash_upper << "," << hash_lower << endl;
 		}
 	}
@@ -1193,8 +1382,8 @@ void Get_Blank_Hashes()
 	uint64 upper_rgb, lower_rgb, combined_rgb;
 
 	cout << "NORMAL:" << endl;
-	combined = FNV_Hash_Combined_64(normal, upper, lower, low_mode_block128, FNV_COORDS_LEN, false);
-	combined_rgb = FNV_Hash_Combined_64(normal, upper_rgb, lower_rgb, low_mode_block128, FNV_COORDS_LEN, true);
+	combined = FNV_Hash_Combined_64(normal, upper, lower, FNV_COORDS, FNV_COORDS_LEN, false);
+	combined_rgb = FNV_Hash_Combined_64(normal, upper_rgb, lower_rgb, FNV_COORDS, FNV_COORDS_LEN, true);
 
 	cout << "  upper:        " << upper << endl;
 	cout << "  upper_rgb:    " << upper_rgb  << endl << endl;
@@ -1206,15 +1395,15 @@ void Get_Blank_Hashes()
 	cout << "  combined_rgb: " << combined_rgb << endl << endl;
 
 	cout << "NO LOWER:" << endl;
-	combined = FNV_Hash_Combined_64(nolower, upper, lower, low_mode_block128, FNV_COORDS_LEN, false);
-	combined_rgb = FNV_Hash_Combined_64(nolower, upper_rgb, lower_rgb, low_mode_block128, FNV_COORDS_LEN, true);
+	combined = FNV_Hash_Combined_64(nolower, upper, lower, FNV_COORDS, FNV_COORDS_LEN, false);
+	combined_rgb = FNV_Hash_Combined_64(nolower, upper_rgb, lower_rgb, FNV_COORDS, FNV_COORDS_LEN, true);
 
 	cout << "  combined:     " << combined << endl;
 	cout << "  combined_rgb: " << combined_rgb << endl << endl;
 
 	cout << "NO UPPER:" << endl;
-	combined = FNV_Hash_Combined_64(noupper, upper, lower, low_mode_block128, FNV_COORDS_LEN, false);
-	combined_rgb = FNV_Hash_Combined_64(noupper, upper_rgb, lower_rgb, low_mode_block128, FNV_COORDS_LEN, true);
+	combined = FNV_Hash_Combined_64(noupper, upper, lower, FNV_COORDS, FNV_COORDS_LEN, false);
+	combined_rgb = FNV_Hash_Combined_64(noupper, upper_rgb, lower_rgb, FNV_COORDS, FNV_COORDS_LEN, true);
 
 	cout << "  combined:     " << combined << endl;
 	cout << "  combined_rgb: " << combined_rgb << endl << endl;
@@ -1443,7 +1632,11 @@ int _tmain(int argc, _TCHAR* argv[])
 	//Copy_Unique_Left_Objects(analysis, analysis / "objects");
 	//return 0;
 
-	Analyze_Pixels(analysis, debug / "object_analysis.csv");
+	//Analyze_Pixels(analysis, debug / "object_analysis.csv");
+	//getchar();
+	//return 0;
+
+	Analyze_Collisions(analysis, debug / "collision_analysis.csv");
 	getchar();
 	return 0;
 
@@ -1494,7 +1687,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	for (int i = 0; i < images.size(); i++) {
 		cv::Mat img = images[i];
 		//uint64 hash = Old_Hash_Algorithm_1(img);
-		uint64 hash = FNV_Hash_64(img, high_var_block128_collision44, 297);
+		uint64 hash = FNV_Hash(img, FNV_COORDS, FNV_COORDS_LEN);
 		hashmap[hash].insert(image_names[i]);
 	}
 
@@ -1564,7 +1757,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	for (int i = 0; i < images.size(); i++) {
 		cv::Mat img = images[i];
 		start_time = clock();
-		uint64 hash = FNV_Hash_64(img, hash1, 64, false);
+		uint64 hash = FNV_Hash(img, hash1, 64, false);
 		end_time = clock();
 		total_time += end_time - start_time;
 		hashmap[hash].insert(image_names[i]);
@@ -1585,7 +1778,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	for (int i = 0; i < images.size(); i++) {
 		cv::Mat img = images[i];
 		start_time = clock();
-		uint64 hash = FNV_Hash_64(img, high_var_block128_collision44, 253, false);
+		uint64 hash = FNV_Hash(img, FNV_COORDS, FNV_COORDS_LEN, false);
 		end_time = clock();
 		total_time += end_time - start_time;
 		hashmap[hash].insert(image_names[i]);
@@ -1606,7 +1799,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	for (int i = 0; i < images.size(); i++) {
 		cv::Mat img = images[i];
 		start_time = clock();
-		uint64 hash = FNV_Hash_64(img, high_var_block128_collision44, 297);
+		uint64 hash = FNV_Hash(img, FNV_COORDS, FNV_COORDS_LEN);
 		end_time = clock();
 		total_time += end_time - start_time;
 		hashmap[hash].insert(image_names[i]);
