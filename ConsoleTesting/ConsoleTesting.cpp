@@ -1,7 +1,7 @@
 // ConsoleTesting.cpp : Defines the entry point for the console application.
 //
-
 #include "stdafx.h"
+#include "MurmurHash2.h"
 #include "md5.h"
 #include <iostream>
 #include <ctime>
@@ -108,12 +108,12 @@ coord hash1[64] = { coord{ 0, 0 }, coord{ 16, 0 }, coord{ 32, 0 }, coord{ 48, 0 
 //coord high_var_block128_collision44[165] = { coord{ 4, 7 }, coord{ 15, 8 }, coord{ 24, 8 }, coord{ 39, 6 }, coord{ 55, 2 }, coord{ 57, 2 }, coord{ 72, 8 }, coord{ 84, 3 }, coord{ 90, 9 }, coord{ 103, 5 }, coord{ 121, 2 }, coord{ 3, 15 }, coord{ 13, 22 }, coord{ 28, 14 }, coord{ 44, 16 }, coord{ 54, 21 }, coord{ 58, 22 }, coord{ 72, 13 }, coord{ 82, 13 }, coord{ 98, 18 }, coord{ 103, 17 }, coord{ 117, 18 }, coord{ 4, 28 }, coord{ 18, 24 }, coord{ 31, 31 }, coord{ 35, 28 }, coord{ 55, 31 }, coord{ 61, 26 }, coord{ 73, 32 }, coord{ 87, 33 }, coord{ 94, 30 }, coord{ 108, 24 }, coord{ 112, 31 }, coord{ 7, 40 }, coord{ 14, 39 }, coord{ 31, 35 }, coord{ 35, 35 }, coord{ 49, 44 }, coord{ 61, 36 }, coord{ 77, 35 }, coord{ 83, 35 }, coord{ 95, 38 }, coord{ 102, 35 }, coord{ 113, 35 }, coord{ 10, 55 }, coord{ 15, 49 }, coord{ 25, 55 }, coord{ 44, 48 }, coord{ 47, 49 }, coord{ 61, 55 }, coord{ 77, 49 }, coord{ 81, 48 }, coord{ 90, 48 }, coord{ 104, 55 }, coord{ 114, 46 }, coord{ 10, 61 }, coord{ 16, 57 }, coord{ 31, 59 }, coord{ 41, 64 }, coord{ 47, 64 }, coord{ 62, 59 }, coord{ 69, 61 }, coord{ 85, 63 }, coord{ 95, 63 }, coord{ 101, 59 }, coord{ 117, 66 }, coord{ 7, 74 }, coord{ 21, 73 }, coord{ 28, 74 }, coord{ 42, 74 }, coord{ 49, 69 }, coord{ 62, 69 }, coord{ 72, 68 }, coord{ 83, 74 }, coord{ 94, 77 }, coord{ 103, 77 }, coord{ 118, 77 }, coord{ 2, 85 }, coord{ 20, 85 }, coord{ 29, 81 }, coord{ 38, 87 }, coord{ 47, 79 }, coord{ 63, 79 }, coord{ 77, 87 }, coord{ 88, 83 }, coord{ 97, 84 }, coord{ 105, 79 }, coord{ 113, 88 }, coord{ 7, 94 }, coord{ 18, 98 }, coord{ 32, 99 }, coord{ 36, 99 }, coord{ 54, 99 }, coord{ 62, 98 }, coord{ 71, 99 }, coord{ 80, 98 }, coord{ 97, 97 }, coord{ 108, 99 }, coord{ 113, 95 }, coord{ 4, 109 }, coord{ 20, 101 }, coord{ 25, 101 }, coord{ 35, 102 }, coord{ 51, 104 }, coord{ 61, 106 }, coord{ 71, 108 }, coord{ 84, 109 }, coord{ 95, 101 }, coord{ 108, 101 }, coord{ 112, 104 }, coord{ 11, 116 }, coord{ 13, 118 }, coord{ 27, 120 }, coord{ 37, 121 }, coord{ 52, 113 }, coord{ 59, 121 }, coord{ 77, 115 }, coord{ 85, 112 }, coord{ 93, 112 }, coord{ 104, 112 }, coord{ 115, 112 }, coord{ 127, 127 }, coord{ 127, 126 }, coord{ 16, 45 }, coord{ 18, 44 }, coord{ 118, 85 }, coord{ 18, 42 }, coord{ 20, 45 }, coord{ 36, 45 }, coord{ 124, 80 }, coord{ 119, 84 }, coord{ 124, 84 }, coord{ 119, 85 }, coord{ 119, 86 }, coord{ 120, 86 }, coord{ 119, 89 }, coord{ 8, 33 }, coord{ 18, 43 }, coord{ 19, 43 }, coord{ 17, 44 }, coord{ 19, 44 }, coord{ 20, 44 }, coord{ 37, 44 }, coord{ 9, 45 }, coord{ 21, 45 }, coord{ 26, 45 }, coord{ 27, 45 }, coord{ 28, 45 }, coord{ 29, 45 }, coord{ 30, 45 }, coord{ 31, 45 }, coord{ 32, 45 }, coord{ 33, 45 }, coord{ 34, 45 }, coord{ 35, 45 }, coord{ 38, 45 }, coord{ 120, 89 }, coord{ 121, 89 }, coord{ 106, 90 }, coord{ 99, 93 }, coord{ 100, 93 }, coord{ 68, 110 }, coord{ 61, 117 }, coord{ 77, 117 }, coord{ 93, 5 } };
 
 // low_mode_block128
-//const int FNV_COORDS_LEN = 121;
-//coord FNV_COORDS[FNV_COORDS_LEN] = { coord{ 11, 9 }, coord{ 22, 7 }, coord{ 28, 7 }, coord{ 39, 9 }, coord{ 53, 9 }, coord{ 60, 7 }, coord{ 76, 11 }, coord{ 88, 8 }, coord{ 91, 11 }, coord{ 102, 7 }, coord{ 115, 9 }, coord{ 11, 15 }, coord{ 22, 19 }, coord{ 28, 20 }, coord{ 40, 22 }, coord{ 54, 16 }, coord{ 60, 17 }, coord{ 76, 17 }, coord{ 87, 20 }, coord{ 91, 20 }, coord{ 107, 20 }, coord{ 115, 13 }, coord{ 11, 24 }, coord{ 22, 29 }, coord{ 28, 30 }, coord{ 39, 29 }, coord{ 46, 30 }, coord{ 60, 30 }, coord{ 70, 30 }, coord{ 87, 25 }, coord{ 93, 25 }, coord{ 102, 27 }, coord{ 115, 33 }, coord{ 11, 38 }, coord{ 22, 39 }, coord{ 28, 44 }, coord{ 39, 41 }, coord{ 55, 35 }, coord{ 60, 38 }, coord{ 70, 40 }, coord{ 87, 37 }, coord{ 99, 44 }, coord{ 102, 43 }, coord{ 115, 35 }, coord{ 11, 50 }, coord{ 21, 46 }, coord{ 25, 51 }, coord{ 40, 48 }, coord{ 46, 46 }, coord{ 60, 46 }, coord{ 76, 47 }, coord{ 87, 47 }, coord{ 93, 49 }, coord{ 107, 53 }, coord{ 115, 49 }, coord{ 11, 61 }, coord{ 22, 59 }, coord{ 25, 59 }, coord{ 40, 59 }, coord{ 55, 57 }, coord{ 60, 61 }, coord{ 70, 58 }, coord{ 87, 59 }, coord{ 99, 58 }, coord{ 102, 59 }, coord{ 115, 57 }, coord{ 7, 77 }, coord{ 21, 77 }, coord{ 24, 71 }, coord{ 36, 77 }, coord{ 46, 76 }, coord{ 60, 77 }, coord{ 70, 70 }, coord{ 87, 71 }, coord{ 93, 77 }, coord{ 102, 69 }, coord{ 115, 77 }, coord{ 11, 84 }, coord{ 21, 80 }, coord{ 27, 85 }, coord{ 39, 79 }, coord{ 55, 85 }, coord{ 60, 81 }, coord{ 75, 86 }, coord{ 82, 84 }, coord{ 93, 84 }, coord{ 107, 79 }, coord{ 115, 79 }, coord{ 11, 92 }, coord{ 22, 97 }, coord{ 28, 90 }, coord{ 40, 93 }, coord{ 46, 92 }, coord{ 60, 91 }, coord{ 76, 97 }, coord{ 82, 98 }, coord{ 93, 90 }, coord{ 102, 99 }, coord{ 115, 99 }, coord{ 6, 107 }, coord{ 22, 101 }, coord{ 31, 102 }, coord{ 41, 108 }, coord{ 55, 107 }, coord{ 60, 107 }, coord{ 70, 104 }, coord{ 87, 101 }, coord{ 93, 105 }, coord{ 102, 101 }, coord{ 115, 109 }, coord{ 11, 112 }, coord{ 21, 112 }, coord{ 27, 113 }, coord{ 41, 112 }, coord{ 55, 113 }, coord{ 60, 120 }, coord{ 70, 116 }, coord{ 82, 112 }, coord{ 93, 113 }, coord{ 107, 117 }, coord{ 115, 113 } };
+const int FNV_COORDS_LEN = 121;
+coord FNV_COORDS[FNV_COORDS_LEN] = { coord{ 11, 9 }, coord{ 22, 7 }, coord{ 28, 7 }, coord{ 39, 9 }, coord{ 53, 9 }, coord{ 60, 7 }, coord{ 76, 11 }, coord{ 88, 8 }, coord{ 91, 11 }, coord{ 102, 7 }, coord{ 115, 9 }, coord{ 11, 15 }, coord{ 22, 19 }, coord{ 28, 20 }, coord{ 40, 22 }, coord{ 54, 16 }, coord{ 60, 17 }, coord{ 76, 17 }, coord{ 87, 20 }, coord{ 91, 20 }, coord{ 107, 20 }, coord{ 115, 13 }, coord{ 11, 24 }, coord{ 22, 29 }, coord{ 28, 30 }, coord{ 39, 29 }, coord{ 46, 30 }, coord{ 60, 30 }, coord{ 70, 30 }, coord{ 87, 25 }, coord{ 93, 25 }, coord{ 102, 27 }, coord{ 115, 33 }, coord{ 11, 38 }, coord{ 22, 39 }, coord{ 28, 44 }, coord{ 39, 41 }, coord{ 55, 35 }, coord{ 60, 38 }, coord{ 70, 40 }, coord{ 87, 37 }, coord{ 99, 44 }, coord{ 102, 43 }, coord{ 115, 35 }, coord{ 11, 50 }, coord{ 21, 46 }, coord{ 25, 51 }, coord{ 40, 48 }, coord{ 46, 46 }, coord{ 60, 46 }, coord{ 76, 47 }, coord{ 87, 47 }, coord{ 93, 49 }, coord{ 107, 53 }, coord{ 115, 49 }, coord{ 11, 61 }, coord{ 22, 59 }, coord{ 25, 59 }, coord{ 40, 59 }, coord{ 55, 57 }, coord{ 60, 61 }, coord{ 70, 58 }, coord{ 87, 59 }, coord{ 99, 58 }, coord{ 102, 59 }, coord{ 115, 57 }, coord{ 7, 77 }, coord{ 21, 77 }, coord{ 24, 71 }, coord{ 36, 77 }, coord{ 46, 76 }, coord{ 60, 77 }, coord{ 70, 70 }, coord{ 87, 71 }, coord{ 93, 77 }, coord{ 102, 69 }, coord{ 115, 77 }, coord{ 11, 84 }, coord{ 21, 80 }, coord{ 27, 85 }, coord{ 39, 79 }, coord{ 55, 85 }, coord{ 60, 81 }, coord{ 75, 86 }, coord{ 82, 84 }, coord{ 93, 84 }, coord{ 107, 79 }, coord{ 115, 79 }, coord{ 11, 92 }, coord{ 22, 97 }, coord{ 28, 90 }, coord{ 40, 93 }, coord{ 46, 92 }, coord{ 60, 91 }, coord{ 76, 97 }, coord{ 82, 98 }, coord{ 93, 90 }, coord{ 102, 99 }, coord{ 115, 99 }, coord{ 6, 107 }, coord{ 22, 101 }, coord{ 31, 102 }, coord{ 41, 108 }, coord{ 55, 107 }, coord{ 60, 107 }, coord{ 70, 104 }, coord{ 87, 101 }, coord{ 93, 105 }, coord{ 102, 101 }, coord{ 115, 109 }, coord{ 11, 112 }, coord{ 21, 112 }, coord{ 27, 113 }, coord{ 41, 112 }, coord{ 55, 113 }, coord{ 60, 120 }, coord{ 70, 116 }, coord{ 82, 112 }, coord{ 93, 113 }, coord{ 107, 117 }, coord{ 115, 113 } };
 
 // low_mode_prog_collisions
-const int FNV_COORDS_LEN = 500;
-coord FNV_COORDS[FNV_COORDS_LEN] = { coord{ 38, 36, 0 }, coord{ 36, 35, 0 }, coord{ 41, 37, 0 }, coord{ 28, 12, 0 }, coord{ 18, 8, 0 }, coord{ 12, 10, 0 }, coord{ 19, 8, 0 }, coord{ 33, 102, 0 }, coord{ 20, 18, 0 }, coord{ 4, 27, 0 }, coord{ 17, 8, 0 }, coord{ 10, 105, 0 }, coord{ 12, 39, 0 }, coord{ 17, 5, 0 }, coord{ 19, 7, 0 }, coord{ 16, 8, 0 }, coord{ 17, 9, 0 }, coord{ 16, 9, 0 }, coord{ 39, 7, 0 }, coord{ 18, 10, 0 }, coord{ 12, 37, 0 }, coord{ 19, 9, 0 }, coord{ 3, 15, 0 }, coord{ 18, 9, 0 }, coord{ 5, 18, 0 }, coord{ 19, 6, 0 }, coord{ 42, 36, 0 }, coord{ 4, 16, 0 }, coord{ 20, 27, 0 }, coord{ 18, 5, 0 }, coord{ 3, 16, 0 }, coord{ 2, 7, 0 }, coord{ 0, 22, 0 }, coord{ 23, 9, 0 }, coord{ 19, 15, 0 }, coord{ 4, 49, 0 }, coord{ 9, 54, 0 }, coord{ 33, 56, 0 }, coord{ 13, 59, 0 }, coord{ 33, 58, 0 }, coord{ 18, 7, 0 }, coord{ 13, 102, 0 }, coord{ 10, 104, 0 }, coord{ 11, 7, 0 }, coord{ 16, 11, 0 }, coord{ 18, 4, 0 }, coord{ 12, 8, 0 }, coord{ 10, 103, 0 }, coord{ 11, 39, 0 }, coord{ 16, 6, 0 }, coord{ 13, 9, 0 }, coord{ 17, 10, 0 }, coord{ 35, 36, 0 }, coord{ 41, 51, 0 }, coord{ 20, 8, 0 }, coord{ 13, 17, 0 }, coord{ 39, 56, 0 }, coord{ 22, 10, 0 }, coord{ 41, 57, 0 }, coord{ 15, 9, 0 }, coord{ 17, 6, 0 }, coord{ 40, 9, 0 }, coord{ 38, 39, 0 }, coord{ 83, 5, 0 }, coord{ 39, 9, 0 }, coord{ 20, 9, 0 }, coord{ 21, 9, 0 }, coord{ 23, 10, 0 }, coord{ 11, 16, 0 }, coord{ 2, 3, 0 }, coord{ 41, 40, 0 }, coord{ 16, 49, 0 }, coord{ 23, 7, 0 }, coord{ 17, 4, 0 }, coord{ 19, 53, 0 }, coord{ 34, 58, 0 }, coord{ 19, 16, 0 }, coord{ 35, 49, 0 }, coord{ 16, 72, 0 }, coord{ 10, 108, 0 }, coord{ 10, 109, 0 }, coord{ 12, 104, 0 }, coord{ 12, 100, 0 }, coord{ 11, 105, 0 }, coord{ 2, 83, 0 }, coord{ 11, 104, 0 }, coord{ 11, 103, 0 }, coord{ 11, 108, 0 }, coord{ 36, 100, 0 }, coord{ 2, 49, 0 }, coord{ 10, 107, 0 }, coord{ 40, 48, 0 }, coord{ 37, 54, 0 }, coord{ 37, 55, 0 }, coord{ 39, 57, 0 }, coord{ 82, 74, 0 }, coord{ 11, 110, 0 }, coord{ 4, 40, 0 }, coord{ 2, 4, 0 }, coord{ 4, 2, 0 }, coord{ 2, 6, 0 }, coord{ 12, 107, 0 }, coord{ 16, 5, 0 }, coord{ 35, 35, 0 }, coord{ 2, 1, 0 }, coord{ 12, 9, 0 }, coord{ 33, 57, 0 }, coord{ 38, 101, 0 }, coord{ 4, 5, 0 }, coord{ 3, 19, 0 }, coord{ 4, 19, 0 }, coord{ 4, 34, 0 }, coord{ 6, 41, 0 }, coord{ 41, 36, 0 }, coord{ 41, 56, 0 }, coord{ 32, 57, 0 }, coord{ 11, 102, 0 }, coord{ 35, 102, 0 }, coord{ 4, 105, 0 }, coord{ 11, 109, 0 }, coord{ 35, 48, 0 }, coord{ 18, 105, 0 }, coord{ 4, 0, 0 }, coord{ 39, 38, 0 }, coord{ 42, 38, 0 }, coord{ 38, 46, 0 }, coord{ 34, 59, 0 }, coord{ 4, 107, 0 }, coord{ 16, 108, 0 }, coord{ 36, 45, 0 }, coord{ 1, 7, 0 }, coord{ 7, 37, 0 }, coord{ 2, 5, 0 }, coord{ 3, 17, 0 }, coord{ 6, 39, 0 }, coord{ 36, 0, 0 }, coord{ 3, 6, 0 }, coord{ 14, 10, 0 }, coord{ 5, 16, 0 }, coord{ 4, 17, 0 }, coord{ 6, 33, 0 }, coord{ 10, 50, 0 }, coord{ 5, 17, 0 }, coord{ 34, 37, 0 }, coord{ 17, 69, 0 }, coord{ 36, 34, 0 }, coord{ 40, 49, 0 }, coord{ 4, 48, 0 }, coord{ 41, 49, 0 }, coord{ 2, 24, 0 }, coord{ 10, 35, 0 }, coord{ 41, 50, 0 }, coord{ 35, 58, 0 }, coord{ 12, 103, 0 }, coord{ 36, 103, 0 }, coord{ 13, 5, 0 }, coord{ 13, 10, 0 }, coord{ 4, 13, 0 }, coord{ 8, 18, 0 }, coord{ 36, 49, 0 }, coord{ 37, 51, 0 }, coord{ 35, 37, 0 }, coord{ 43, 37, 0 }, coord{ 4, 50, 0 }, coord{ 39, 50, 0 }, coord{ 33, 6, 0 }, coord{ 41, 39, 0 }, coord{ 43, 40, 0 }, coord{ 42, 44, 0 }, coord{ 39, 49, 0 }, coord{ 38, 50, 0 }, coord{ 17, 51, 0 }, coord{ 40, 41, 0 }, coord{ 35, 59, 0 }, coord{ 35, 103, 0 }, coord{ 9, 7, 0 }, coord{ 14, 18, 0 }, coord{ 43, 36, 0 }, coord{ 42, 45, 0 }, coord{ 10, 51, 0 }, coord{ 19, 51, 0 }, coord{ 35, 51, 0 }, coord{ 39, 51, 0 }, coord{ 41, 55, 0 }, coord{ 12, 66, 0 }, coord{ 11, 40, 0 }, coord{ 12, 71, 0 }, coord{ 11, 107, 0 }, coord{ 16, 112, 0 }, coord{ 43, 56, 0 }, coord{ 36, 7, 0 }, coord{ 11, 53, 0 }, coord{ 38, 56, 0 }, coord{ 80, 74, 0 }, coord{ 82, 75, 0 }, coord{ 35, 13, 0 }, coord{ 13, 67, 0 }, coord{ 10, 113, 0 }, coord{ 38, 48, 0 }, coord{ 43, 52, 0 }, coord{ 35, 55, 0 }, coord{ 36, 59, 0 }, coord{ 18, 67, 0 }, coord{ 70, 1, 0 }, coord{ 20, 4, 0 }, coord{ 15, 5, 0 }, coord{ 13, 7, 0 }, coord{ 36, 13, 0 }, coord{ 34, 14, 0 }, coord{ 40, 37, 0 }, coord{ 27, 49, 0 }, coord{ 17, 54, 0 }, coord{ 12, 108, 0 }, coord{ 12, 110, 0 }, coord{ 13, 110, 0 }, coord{ 17, 50, 0 }, coord{ 13, 108, 0 }, coord{ 12, 113, 0 }, coord{ 39, 5, 0 }, coord{ 38, 34, 0 }, coord{ 40, 38, 0 }, coord{ 41, 38, 0 }, coord{ 39, 40, 0 }, coord{ 4, 52, 0 }, coord{ 11, 56, 0 }, coord{ 12, 70, 0 }, coord{ 4, 42, 0 }, coord{ 42, 51, 0 }, coord{ 18, 103, 0 }, coord{ 17, 7, 0 }, coord{ 43, 39, 0 }, coord{ 16, 102, 0 }, coord{ 4, 14, 0 }, coord{ 14, 16, 0 }, coord{ 4, 21, 0 }, coord{ 18, 41, 0 }, coord{ 43, 41, 0 }, coord{ 39, 53, 0 }, coord{ 39, 54, 0 }, coord{ 41, 54, 0 }, coord{ 43, 54, 0 }, coord{ 39, 55, 0 }, coord{ 12, 57, 0 }, coord{ 43, 57, 0 }, coord{ 39, 58, 0 }, coord{ 18, 70, 0 }, coord{ 81, 75, 0 }, coord{ 13, 105, 0 }, coord{ 14, 105, 0 }, coord{ 10, 106, 0 }, coord{ 10, 110, 0 }, coord{ 14, 111, 0 }, coord{ 21, 5, 0 }, coord{ 18, 6, 0 }, coord{ 30, 9, 0 }, coord{ 85, 10, 0 }, coord{ 8, 26, 0 }, coord{ 80, 75, 0 }, coord{ 98, 4, 0 }, coord{ 14, 81, 0 }, coord{ 17, 56, 0 }, coord{ 13, 107, 0 }, coord{ 12, 111, 0 }, coord{ 40, 8, 0 }, coord{ 38, 45, 0 }, coord{ 25, 48, 0 }, coord{ 10, 49, 0 }, coord{ 17, 49, 0 }, coord{ 19, 49, 0 }, coord{ 40, 50, 0 }, coord{ 38, 51, 0 }, coord{ 10, 52, 0 }, coord{ 41, 53, 0 }, coord{ 35, 56, 0 }, coord{ 69, 56, 0 }, coord{ 10, 111, 0 }, coord{ 41, 112, 0 }, coord{ 16, 114, 0 }, coord{ 43, 38, 0 }, coord{ 41, 48, 0 }, coord{ 14, 17, 0 }, coord{ 9, 18, 0 }, coord{ 40, 36, 0 }, coord{ 39, 39, 0 }, coord{ 41, 41, 0 }, coord{ 39, 42, 0 }, coord{ 27, 50, 0 }, coord{ 27, 51, 0 }, coord{ 42, 57, 0 }, coord{ 99, 8, 0 }, coord{ 18, 107, 0 }, coord{ 83, 11, 0 }, coord{ 27, 15, 0 }, coord{ 26, 20, 0 }, coord{ 20, 35, 0 }, coord{ 42, 39, 0 }, coord{ 106, 40, 0 }, coord{ 16, 41, 0 }, coord{ 38, 43, 0 }, coord{ 38, 44, 0 }, coord{ 99, 2, 0 }, coord{ 51, 9, 0 }, coord{ 22, 18, 0 }, coord{ 38, 33, 0 }, coord{ 41, 42, 0 }, coord{ 17, 100, 0 }, coord{ 27, 16, 0 }, coord{ 7, 17, 0 }, coord{ 28, 18, 0 }, coord{ 19, 52, 0 }, coord{ 38, 55, 0 }, coord{ 65, 56, 0 }, coord{ 41, 58, 0 }, coord{ 99, 10, 0 }, coord{ 39, 11, 0 }, coord{ 17, 48, 0 }, coord{ 12, 109, 0 }, coord{ 21, 6, 0 }, coord{ 41, 9, 0 }, coord{ 25, 16, 0 }, coord{ 27, 18, 0 }, coord{ 40, 46, 0 }, coord{ 19, 50, 0 }, coord{ 21, 51, 0 }, coord{ 17, 52, 0 }, coord{ 12, 59, 0 }, coord{ 11, 111, 0 }, coord{ 40, 112, 0 }, coord{ 11, 8, 0 }, coord{ 40, 10, 0 }, coord{ 51, 19, 0 }, coord{ 38, 42, 0 }, coord{ 36, 46, 0 }, coord{ 47, 51, 0 }, coord{ 43, 53, 0 }, coord{ 40, 56, 0 }, coord{ 40, 57, 0 }, coord{ 82, 67, 0 }, coord{ 18, 104, 0 }, coord{ 15, 7, 0 }, coord{ 20, 7, 0 }, coord{ 17, 11, 0 }, coord{ 21, 11, 0 }, coord{ 18, 13, 0 }, coord{ 40, 39, 0 }, coord{ 19, 48, 0 }, coord{ 42, 49, 0 }, coord{ 65, 55, 0 }, coord{ 65, 57, 0 }, coord{ 22, 69, 0 }, coord{ 17, 102, 0 }, coord{ 13, 103, 0 }, coord{ 13, 111, 0 }, coord{ 11, 112, 0 }, coord{ 41, 5, 0 }, coord{ 84, 5, 0 }, coord{ 13, 16, 0 }, coord{ 51, 20, 0 }, coord{ 20, 23, 0 }, coord{ 43, 7, 0 }, coord{ 30, 10, 0 }, coord{ 39, 10, 0 }, coord{ 13, 11, 0 }, coord{ 36, 15, 0 }, coord{ 15, 17, 0 }, coord{ 21, 17, 0 }, coord{ 8, 22, 0 }, coord{ 0, 24, 0 }, coord{ 39, 41, 0 }, coord{ 16, 47, 0 }, coord{ 19, 54, 0 }, coord{ 38, 54, 0 }, coord{ 65, 54, 0 }, coord{ 43, 58, 0 }, coord{ 12, 99, 0 }, coord{ 13, 109, 0 }, coord{ 21, 7, 0 }, coord{ 53, 9, 0 }, coord{ 87, 10, 0 }, coord{ 20, 11, 0 }, coord{ 21, 13, 0 }, coord{ 38, 14, 0 }, coord{ 10, 26, 0 }, coord{ 10, 27, 0 }, coord{ 4, 28, 0 }, coord{ 40, 33, 0 }, coord{ 16, 42, 0 }, coord{ 35, 45, 0 }, coord{ 36, 47, 0 }, coord{ 18, 48, 0 }, coord{ 18, 51, 0 }, coord{ 40, 52, 0 }, coord{ 42, 54, 0 }, coord{ 20, 56, 0 }, coord{ 23, 56, 0 }, coord{ 12, 58, 0 }, coord{ 38, 102, 0 }, coord{ 17, 104, 0 }, coord{ 18, 106, 0 }, coord{ 14, 109, 0 }, coord{ 18, 112, 0 }, coord{ 10, 114, 0 }, coord{ 98, 2, 0 }, coord{ 31, 6, 0 }, coord{ 40, 6, 0 }, coord{ 41, 7, 0 }, coord{ 9, 9, 0 }, coord{ 21, 10, 0 }, coord{ 23, 12, 0 }, coord{ 18, 16, 0 }, coord{ 31, 19, 0 }, coord{ 6, 23, 0 }, coord{ 107, 27, 0 }, coord{ 98, 11, 0 }, coord{ 36, 33, 0 }, coord{ 40, 40, 0 }, coord{ 36, 43, 0 }, coord{ 39, 44, 0 }, coord{ 51, 53, 0 }, coord{ 106, 54, 0 }, coord{ 34, 57, 0 }, coord{ 35, 104, 0 }, coord{ 36, 105, 0 }, coord{ 14, 7, 0 }, coord{ 31, 10, 0 }, coord{ 17, 13, 0 }, coord{ 22, 13, 0 }, coord{ 17, 16, 0 }, coord{ 12, 26, 0 }, coord{ 38, 41, 0 }, coord{ 18, 43, 0 }, coord{ 40, 53, 0 }, coord{ 40, 54, 0 }, coord{ 55, 54, 0 }, coord{ 22, 56, 0 }, coord{ 21, 57, 0 }, coord{ 52, 110, 0 }, coord{ 25, 50, 0 }, coord{ 18, 61, 0 }, coord{ 12, 112, 0 }, coord{ 41, 8, 0 }, coord{ 16, 27, 0 }, coord{ 102, 33, 0 }, coord{ 35, 34, 0 }, coord{ 40, 35, 0 }, coord{ 106, 41, 0 }, coord{ 40, 42, 0 }, coord{ 49, 48, 0 }, coord{ 46, 50, 0 }, coord{ 42, 55, 0 }, coord{ 42, 59, 0 }, coord{ 82, 68, 0 }, coord{ 102, 71, 0 }, coord{ 22, 12, 0 }, coord{ 17, 108, 0 }, coord{ 36, 14, 0 }, coord{ 21, 56, 0 }, coord{ 34, 81, 0 }, coord{ 53, 109, 0 }, coord{ 6, 112, 0 }, coord{ 14, 5, 0 }, coord{ 82, 26, 0 }, coord{ 38, 32, 0 }, coord{ 40, 58, 0 }, coord{ 37, 104, 0 }, coord{ 12, 19, 0 }, coord{ 7, 21, 0 }, coord{ 40, 34, 0 }, coord{ 39, 43, 0 }, coord{ 41, 43, 0 }, coord{ 43, 44, 0 }, coord{ 39, 45, 0 }, coord{ 46, 110, 0 }, coord{ 18, 111, 0 }, coord{ 19, 112, 0 }, coord{ 20, 112, 0 }, coord{ 37, 112, 0 }, coord{ 16, 2, 0 }, coord{ 6, 11, 0 }, coord{ 17, 15, 0 }, coord{ 25, 17, 0 }, coord{ 28, 17, 0 }, coord{ 24, 24, 0 }, coord{ 24, 27, 0 }, coord{ 21, 50, 0 }, coord{ 21, 52, 0 }, coord{ 21, 53, 0 }, coord{ 47, 57, 0 }, coord{ 100, 83, 0 }, coord{ 11, 113, 0 }, coord{ 18, 102, 0 }, coord{ 20, 102, 0 }, coord{ 31, 102, 0 }, coord{ 22, 11, 0 }, coord{ 13, 19, 0 }, coord{ 28, 19, 0 }, coord{ 12, 21, 0 }, coord{ 55, 22, 0 }, coord{ 9, 23, 0 }, coord{ 64, 24, 0 } };
+//const int FNV_COORDS_LEN = 500;
+//coord FNV_COORDS[FNV_COORDS_LEN] = { coord{ 38, 36, -1 }, coord{ 36, 35, -1 }, coord{ 41, 37, -1 }, coord{ 28, 12, -1 }, coord{ 18, 8, -1 }, coord{ 12, 10, -1 }, coord{ 19, 8, -1 }, coord{ 33, 102, -1 }, coord{ 20, 18, -1 }, coord{ 4, 27, -1 }, coord{ 17, 8, -1 }, coord{ 10, 105, -1 }, coord{ 12, 39, -1 }, coord{ 17, 5, -1 }, coord{ 19, 7, -1 }, coord{ 16, 8, -1 }, coord{ 17, 9, -1 }, coord{ 16, 9, -1 }, coord{ 39, 7, -1 }, coord{ 18, 10, -1 }, coord{ 12, 37, -1 }, coord{ 19, 9, -1 }, coord{ 3, 15, -1 }, coord{ 18, 9, -1 }, coord{ 5, 18, -1 }, coord{ 19, 6, -1 }, coord{ 42, 36, -1 }, coord{ 4, 16, -1 }, coord{ 20, 27, -1 }, coord{ 18, 5, -1 }, coord{ 3, 16, -1 }, coord{ 2, 7, -1 }, coord{ 0, 22, -1 }, coord{ 23, 9, -1 }, coord{ 19, 15, -1 }, coord{ 4, 49, -1 }, coord{ 9, 54, -1 }, coord{ 33, 56, -1 }, coord{ 13, 59, -1 }, coord{ 33, 58, -1 }, coord{ 18, 7, -1 }, coord{ 13, 102, -1 }, coord{ 10, 104, -1 }, coord{ 11, 7, -1 }, coord{ 16, 11, -1 }, coord{ 18, 4, -1 }, coord{ 12, 8, -1 }, coord{ 10, 103, -1 }, coord{ 11, 39, -1 }, coord{ 16, 6, -1 }, coord{ 13, 9, -1 }, coord{ 17, 10, -1 }, coord{ 35, 36, -1 }, coord{ 41, 51, -1 }, coord{ 20, 8, -1 }, coord{ 13, 17, -1 }, coord{ 39, 56, -1 }, coord{ 22, 10, -1 }, coord{ 41, 57, -1 }, coord{ 15, 9, -1 }, coord{ 17, 6, -1 }, coord{ 40, 9, -1 }, coord{ 38, 39, -1 }, coord{ 83, 5, -1 }, coord{ 39, 9, -1 }, coord{ 20, 9, -1 }, coord{ 21, 9, -1 }, coord{ 23, 10, -1 }, coord{ 11, 16, -1 }, coord{ 2, 3, -1 }, coord{ 41, 40, -1 }, coord{ 16, 49, -1 }, coord{ 23, 7, -1 }, coord{ 17, 4, -1 }, coord{ 19, 53, -1 }, coord{ 34, 58, -1 }, coord{ 19, 16, -1 }, coord{ 35, 49, -1 }, coord{ 16, 72, -1 }, coord{ 10, 108, -1 }, coord{ 10, 109, -1 }, coord{ 12, 104, -1 }, coord{ 12, 100, -1 }, coord{ 11, 105, -1 }, coord{ 2, 83, -1 }, coord{ 11, 104, -1 }, coord{ 11, 103, -1 }, coord{ 11, 108, -1 }, coord{ 36, 100, -1 }, coord{ 2, 49, -1 }, coord{ 10, 107, -1 }, coord{ 40, 48, -1 }, coord{ 37, 54, -1 }, coord{ 37, 55, -1 }, coord{ 39, 57, -1 }, coord{ 82, 74, -1 }, coord{ 11, 110, -1 }, coord{ 4, 40, -1 }, coord{ 2, 4, -1 }, coord{ 4, 2, -1 }, coord{ 2, 6, -1 }, coord{ 12, 107, -1 }, coord{ 16, 5, -1 }, coord{ 35, 35, -1 }, coord{ 2, 1, -1 }, coord{ 12, 9, -1 }, coord{ 33, 57, -1 }, coord{ 38, 101, -1 }, coord{ 4, 5, -1 }, coord{ 3, 19, -1 }, coord{ 4, 19, -1 }, coord{ 4, 34, -1 }, coord{ 6, 41, -1 }, coord{ 41, 36, -1 }, coord{ 41, 56, -1 }, coord{ 32, 57, -1 }, coord{ 11, 102, -1 }, coord{ 35, 102, -1 }, coord{ 4, 105, -1 }, coord{ 11, 109, -1 }, coord{ 35, 48, -1 }, coord{ 18, 105, -1 }, coord{ 4, 0, -1 }, coord{ 39, 38, -1 }, coord{ 42, 38, -1 }, coord{ 38, 46, -1 }, coord{ 34, 59, -1 }, coord{ 4, 107, -1 }, coord{ 16, 108, -1 }, coord{ 36, 45, -1 }, coord{ 1, 7, -1 }, coord{ 7, 37, -1 }, coord{ 2, 5, -1 }, coord{ 3, 17, -1 }, coord{ 6, 39, -1 }, coord{ 36, 0, -1 }, coord{ 3, 6, -1 }, coord{ 14, 10, -1 }, coord{ 5, 16, -1 }, coord{ 4, 17, -1 }, coord{ 6, 33, -1 }, coord{ 10, 50, -1 }, coord{ 5, 17, -1 }, coord{ 34, 37, -1 }, coord{ 17, 69, -1 }, coord{ 36, 34, -1 }, coord{ 40, 49, -1 }, coord{ 4, 48, -1 }, coord{ 41, 49, -1 }, coord{ 2, 24, -1 }, coord{ 10, 35, -1 }, coord{ 41, 50, -1 }, coord{ 35, 58, -1 }, coord{ 12, 103, -1 }, coord{ 36, 103, -1 }, coord{ 13, 5, -1 }, coord{ 13, 10, -1 }, coord{ 4, 13, -1 }, coord{ 8, 18, -1 }, coord{ 36, 49, -1 }, coord{ 37, 51, -1 }, coord{ 35, 37, -1 }, coord{ 43, 37, -1 }, coord{ 4, 50, -1 }, coord{ 39, 50, -1 }, coord{ 33, 6, -1 }, coord{ 41, 39, -1 }, coord{ 43, 40, -1 }, coord{ 42, 44, -1 }, coord{ 39, 49, -1 }, coord{ 38, 50, -1 }, coord{ 17, 51, -1 }, coord{ 40, 41, -1 }, coord{ 35, 59, -1 }, coord{ 35, 103, -1 }, coord{ 9, 7, -1 }, coord{ 14, 18, -1 }, coord{ 43, 36, -1 }, coord{ 42, 45, -1 }, coord{ 10, 51, -1 }, coord{ 19, 51, -1 }, coord{ 35, 51, -1 }, coord{ 39, 51, -1 }, coord{ 41, 55, -1 }, coord{ 12, 66, -1 }, coord{ 11, 40, -1 }, coord{ 12, 71, -1 }, coord{ 11, 107, -1 }, coord{ 16, 112, -1 }, coord{ 43, 56, -1 }, coord{ 36, 7, -1 }, coord{ 11, 53, -1 }, coord{ 38, 56, -1 }, coord{ 80, 74, -1 }, coord{ 82, 75, -1 }, coord{ 35, 13, -1 }, coord{ 13, 67, -1 }, coord{ 10, 113, -1 }, coord{ 38, 48, -1 }, coord{ 43, 52, -1 }, coord{ 35, 55, -1 }, coord{ 36, 59, -1 }, coord{ 18, 67, -1 }, coord{ 70, 1, -1 }, coord{ 20, 4, -1 }, coord{ 15, 5, -1 }, coord{ 13, 7, -1 }, coord{ 36, 13, -1 }, coord{ 34, 14, -1 }, coord{ 40, 37, -1 }, coord{ 27, 49, -1 }, coord{ 17, 54, -1 }, coord{ 12, 108, -1 }, coord{ 12, 110, -1 }, coord{ 13, 110, -1 }, coord{ 17, 50, -1 }, coord{ 13, 108, -1 }, coord{ 12, 113, -1 }, coord{ 39, 5, -1 }, coord{ 38, 34, -1 }, coord{ 40, 38, -1 }, coord{ 41, 38, -1 }, coord{ 39, 40, -1 }, coord{ 4, 52, -1 }, coord{ 11, 56, -1 }, coord{ 12, 70, -1 }, coord{ 4, 42, -1 }, coord{ 42, 51, -1 }, coord{ 18, 103, -1 }, coord{ 17, 7, -1 }, coord{ 43, 39, -1 }, coord{ 16, 102, -1 }, coord{ 4, 14, -1 }, coord{ 14, 16, -1 }, coord{ 4, 21, -1 }, coord{ 18, 41, -1 }, coord{ 43, 41, -1 }, coord{ 39, 53, -1 }, coord{ 39, 54, -1 }, coord{ 41, 54, -1 }, coord{ 43, 54, -1 }, coord{ 39, 55, -1 }, coord{ 12, 57, -1 }, coord{ 43, 57, -1 }, coord{ 39, 58, -1 }, coord{ 18, 70, -1 }, coord{ 81, 75, -1 }, coord{ 13, 105, -1 }, coord{ 14, 105, -1 }, coord{ 10, 106, -1 }, coord{ 10, 110, -1 }, coord{ 14, 111, -1 }, coord{ 21, 5, -1 }, coord{ 18, 6, -1 }, coord{ 30, 9, -1 }, coord{ 85, 10, -1 }, coord{ 8, 26, -1 }, coord{ 80, 75, -1 }, coord{ 98, 4, -1 }, coord{ 14, 81, -1 }, coord{ 17, 56, -1 }, coord{ 13, 107, -1 }, coord{ 12, 111, -1 }, coord{ 40, 8, -1 }, coord{ 38, 45, -1 }, coord{ 25, 48, -1 }, coord{ 10, 49, -1 }, coord{ 17, 49, -1 }, coord{ 19, 49, -1 }, coord{ 40, 50, -1 }, coord{ 38, 51, -1 }, coord{ 10, 52, -1 }, coord{ 41, 53, -1 }, coord{ 35, 56, -1 }, coord{ 69, 56, -1 }, coord{ 10, 111, -1 }, coord{ 41, 112, -1 }, coord{ 16, 114, -1 }, coord{ 43, 38, -1 }, coord{ 41, 48, -1 }, coord{ 14, 17, -1 }, coord{ 9, 18, -1 }, coord{ 40, 36, -1 }, coord{ 39, 39, -1 }, coord{ 41, 41, -1 }, coord{ 39, 42, -1 }, coord{ 27, 50, -1 }, coord{ 27, 51, -1 }, coord{ 42, 57, -1 }, coord{ 99, 8, -1 }, coord{ 18, 107, -1 }, coord{ 83, 11, -1 }, coord{ 27, 15, -1 }, coord{ 26, 20, -1 }, coord{ 20, 35, -1 }, coord{ 42, 39, -1 }, coord{ 106, 40, -1 }, coord{ 16, 41, -1 }, coord{ 38, 43, -1 }, coord{ 38, 44, -1 }, coord{ 99, 2, -1 }, coord{ 51, 9, -1 }, coord{ 22, 18, -1 }, coord{ 38, 33, -1 }, coord{ 41, 42, -1 }, coord{ 17, 100, -1 }, coord{ 27, 16, -1 }, coord{ 7, 17, -1 }, coord{ 28, 18, -1 }, coord{ 19, 52, -1 }, coord{ 38, 55, -1 }, coord{ 65, 56, -1 }, coord{ 41, 58, -1 }, coord{ 99, 10, -1 }, coord{ 39, 11, -1 }, coord{ 17, 48, -1 }, coord{ 12, 109, -1 }, coord{ 21, 6, -1 }, coord{ 41, 9, -1 }, coord{ 25, 16, -1 }, coord{ 27, 18, -1 }, coord{ 40, 46, -1 }, coord{ 19, 50, -1 }, coord{ 21, 51, -1 }, coord{ 17, 52, -1 }, coord{ 12, 59, -1 }, coord{ 11, 111, -1 }, coord{ 40, 112, -1 }, coord{ 11, 8, -1 }, coord{ 40, 10, -1 }, coord{ 51, 19, -1 }, coord{ 38, 42, -1 }, coord{ 36, 46, -1 }, coord{ 47, 51, -1 }, coord{ 43, 53, -1 }, coord{ 40, 56, -1 }, coord{ 40, 57, -1 }, coord{ 82, 67, -1 }, coord{ 18, 104, -1 }, coord{ 15, 7, -1 }, coord{ 20, 7, -1 }, coord{ 17, 11, -1 }, coord{ 21, 11, -1 }, coord{ 18, 13, -1 }, coord{ 40, 39, -1 }, coord{ 19, 48, -1 }, coord{ 42, 49, -1 }, coord{ 65, 55, -1 }, coord{ 65, 57, -1 }, coord{ 22, 69, -1 }, coord{ 17, 102, -1 }, coord{ 13, 103, -1 }, coord{ 13, 111, -1 }, coord{ 11, 112, -1 }, coord{ 41, 5, -1 }, coord{ 84, 5, -1 }, coord{ 13, 16, -1 }, coord{ 51, 20, -1 }, coord{ 20, 23, -1 }, coord{ 43, 7, -1 }, coord{ 30, 10, -1 }, coord{ 39, 10, -1 }, coord{ 13, 11, -1 }, coord{ 36, 15, -1 }, coord{ 15, 17, -1 }, coord{ 21, 17, -1 }, coord{ 8, 22, -1 }, coord{ 0, 24, -1 }, coord{ 39, 41, -1 }, coord{ 16, 47, -1 }, coord{ 19, 54, -1 }, coord{ 38, 54, -1 }, coord{ 65, 54, -1 }, coord{ 43, 58, -1 }, coord{ 12, 99, -1 }, coord{ 13, 109, -1 }, coord{ 21, 7, -1 }, coord{ 53, 9, -1 }, coord{ 87, 10, -1 }, coord{ 20, 11, -1 }, coord{ 21, 13, -1 }, coord{ 38, 14, -1 }, coord{ 10, 26, -1 }, coord{ 10, 27, -1 }, coord{ 4, 28, -1 }, coord{ 40, 33, -1 }, coord{ 16, 42, -1 }, coord{ 35, 45, -1 }, coord{ 36, 47, -1 }, coord{ 18, 48, -1 }, coord{ 18, 51, -1 }, coord{ 40, 52, -1 }, coord{ 42, 54, -1 }, coord{ 20, 56, -1 }, coord{ 23, 56, -1 }, coord{ 12, 58, -1 }, coord{ 38, 102, -1 }, coord{ 17, 104, -1 }, coord{ 18, 106, -1 }, coord{ 14, 109, -1 }, coord{ 18, 112, -1 }, coord{ 10, 114, -1 }, coord{ 98, 2, -1 }, coord{ 31, 6, -1 }, coord{ 40, 6, -1 }, coord{ 41, 7, -1 }, coord{ 9, 9, -1 }, coord{ 21, 10, -1 }, coord{ 23, 12, -1 }, coord{ 18, 16, -1 }, coord{ 31, 19, -1 }, coord{ 6, 23, -1 }, coord{ 107, 27, -1 }, coord{ 98, 11, -1 }, coord{ 36, 33, -1 }, coord{ 40, 40, -1 }, coord{ 36, 43, -1 }, coord{ 39, 44, -1 }, coord{ 51, 53, -1 }, coord{ 106, 54, -1 }, coord{ 34, 57, -1 }, coord{ 35, 104, -1 }, coord{ 36, 105, -1 }, coord{ 14, 7, -1 }, coord{ 31, 10, -1 }, coord{ 17, 13, -1 }, coord{ 22, 13, -1 }, coord{ 17, 16, -1 }, coord{ 12, 26, -1 }, coord{ 38, 41, -1 }, coord{ 18, 43, -1 }, coord{ 40, 53, -1 }, coord{ 40, 54, -1 }, coord{ 55, 54, -1 }, coord{ 22, 56, -1 }, coord{ 21, 57, -1 }, coord{ 52, 110, -1 }, coord{ 25, 50, -1 }, coord{ 18, 61, -1 }, coord{ 12, 112, -1 }, coord{ 41, 8, -1 }, coord{ 16, 27, -1 }, coord{ 102, 33, -1 }, coord{ 35, 34, -1 }, coord{ 40, 35, -1 }, coord{ 106, 41, -1 }, coord{ 40, 42, -1 }, coord{ 49, 48, -1 }, coord{ 46, 50, -1 }, coord{ 42, 55, -1 }, coord{ 42, 59, -1 }, coord{ 82, 68, -1 }, coord{ 102, 71, -1 }, coord{ 22, 12, -1 }, coord{ 17, 108, -1 }, coord{ 36, 14, -1 }, coord{ 21, 56, -1 }, coord{ 34, 81, -1 }, coord{ 53, 109, -1 }, coord{ 6, 112, -1 }, coord{ 14, 5, -1 }, coord{ 82, 26, -1 }, coord{ 38, 32, -1 }, coord{ 40, 58, -1 }, coord{ 37, 104, -1 }, coord{ 12, 19, -1 }, coord{ 7, 21, -1 }, coord{ 40, 34, -1 }, coord{ 39, 43, -1 }, coord{ 41, 43, -1 }, coord{ 43, 44, -1 }, coord{ 39, 45, -1 }, coord{ 46, 110, -1 }, coord{ 18, 111, -1 }, coord{ 19, 112, -1 }, coord{ 20, 112, -1 }, coord{ 37, 112, -1 }, coord{ 16, 2, -1 }, coord{ 6, 11, -1 }, coord{ 17, 15, -1 }, coord{ 25, 17, -1 }, coord{ 28, 17, -1 }, coord{ 24, 24, -1 }, coord{ 24, 27, -1 }, coord{ 21, 50, -1 }, coord{ 21, 52, -1 }, coord{ 21, 53, -1 }, coord{ 47, 57, -1 }, coord{ 100, 83, -1 }, coord{ 11, 113, -1 }, coord{ 18, 102, -1 }, coord{ 20, 102, -1 }, coord{ 31, 102, -1 }, coord{ 22, 11, -1 }, coord{ 13, 19, -1 }, coord{ 28, 19, -1 }, coord{ 12, 21, -1 }, coord{ 55, 22, -1 }, coord{ 9, 23, -1 }, coord{ 64, 24, -1 } };
 
 uint64 Hash_Algorithm_1(const cv::Mat& img)
 {
@@ -312,6 +312,96 @@ uint64 FNV_Full(const cv::Mat& img)
 	return hash;
 }
 
+uint64 MURMUR2_SEED = 0x6d6176697269636b;
+
+uint64 Murmur2_Full(const cv::Mat& img)
+{
+	int buflen = img.rows * img.cols * 3;
+	char* buf = new char[buflen];
+	int index = 0;
+
+	for (int y = 0; y < img.rows; y++) {
+		cv::Mat row = img.row(y);
+		for (int x = 0; x < row.cols; x++) {
+			cv::Vec3b pixel = row.at<cv::Vec3b>(0, x);
+			for (int c = 0; c < 3; c++)
+				buf[index++] = pixel[c];
+		}
+	}
+
+	uint64 hash = MurmurHash64B(buf, buflen, MURMUR2_SEED);
+	delete[] buf;
+	return hash;
+}
+
+uint64 Murmur2_Hash(const cv::Mat& img, coord* coords, int len, bool use_RGB = true)
+{
+	int buflen = (use_RGB) ? len * 3 : len;
+	char* buf = new char[buflen];
+	int index = 0;
+
+	coord* point = coords;
+	for (int i = 0; i < len; i++, point++) {
+		uchar val = 0, red = 0, green = 0, blue = 0;
+		if (point->x < img.cols && point->y < img.rows) {
+			cv::Vec3b pixel = img.at<cv::Vec3b>(point->y, point->x);
+			if (use_RGB) {
+				red = pixel[0];
+				green = pixel[1];
+				blue = pixel[2];
+			} else if (point->c != coord::none) {
+				val = pixel[point->c];
+			} else {
+				val = round((pixel[0] + pixel[1] + pixel[2]) / 3);
+			}
+		}
+		if (use_RGB) {
+			buf[index++] = red;
+			buf[index++] = green;
+			buf[index++] = blue;
+		} else
+			buf[index++] = val;
+	}
+
+	uint64 hash = MurmurHash64B(buf, buflen, MURMUR2_SEED);
+	delete[] buf;
+	return hash;
+}
+
+
+uint64 Murmur2_Hash(const cv::Mat& img, deque<coord> coords, bool use_RGB = true)
+{
+	int buflen = (use_RGB) ? coords.size() * 3 : coords.size();
+	char* buf = new char[buflen];
+	int index = 0;
+
+	for (coord point : coords) {
+		uchar val = 0, red = 0, green = 0, blue = 0;
+		if (point.x < img.cols && point.y < img.rows) {
+			cv::Vec3b pixel = img.at<cv::Vec3b>(point.y, point.x);
+			if(use_RGB) {
+				red = pixel[0];
+				green = pixel[1];
+				blue = pixel[2];
+			} else if (point.c != coord::none) {
+				val = pixel[point.c];
+			} else {
+				val = round((pixel[0] + pixel[1] + pixel[2]) / 3);
+			}
+		}
+		if (use_RGB) {
+			buf[index++] = red;
+			buf[index++] = green;
+			buf[index++] = blue;
+		} else
+			buf[index++] = val;
+	}
+
+	uint64 hash = MurmurHash64B(buf, buflen, MURMUR2_SEED);
+	delete[] buf;
+	return hash;
+}
+
 
 void Copy_Unique_Left_Half(fs::path debug, fs::path dest)										// TODO: STOP USING MD5!
 {
@@ -460,7 +550,7 @@ struct image
 const int DIM_X = 128;
 const int DIM_Y = 128;
 
-void get_images(fs::path analysis, deque<image*>& images, unordered_set<uint64> image_hashes)
+void get_images(fs::path analysis, deque<image*>& images, unordered_set<uint64>& image_hashes)
 {
 	try {
 		fs::directory_iterator iter(analysis), end;
@@ -485,27 +575,27 @@ void get_images(fs::path analysis, deque<image*>& images, unordered_set<uint64> 
 
 				// a
 				cv::Rect rect = cv::Rect(0, 0, min(img.cols, DIM_X), min(img.rows, DIM_Y));
-				uint64 hash = FNV_Full(img(rect));													// hash the object
-				if (image_hashes.insert(hash).second) images.push_back(new image(path, rect));		// only insert unique objects
+				uint64 hash = Murmur2_Full(img(rect));													// hash the object
+				if (image_hashes.insert(hash).second) images.push_back(new image(path, rect));			// only insert unique objects
 
 				// b
 				if (img.cols > DIM_X) {
 					rect = cv::Rect(DIM_X, 0, min(img.cols - DIM_X, DIM_X), min(img.rows, DIM_Y));
-					uint64 hash = FNV_Full(img(rect));
+					uint64 hash = Murmur2_Full(img(rect));
 					if (image_hashes.insert(hash).second) images.push_back(new image(path, rect));
 				}
 
 				// c
 				if (img.rows > DIM_Y) {
 					rect = cv::Rect(0, DIM_Y, min(img.cols, DIM_X), min(img.rows - DIM_Y, DIM_Y));
-					uint64 hash = FNV_Full(img(rect));
+					uint64 hash = Murmur2_Full(img(rect));
 					if (image_hashes.insert(hash).second) images.push_back(new image(path, rect));
 				}
 
 				// d
 				if (img.cols > DIM_X && img.rows > DIM_Y) {
 					rect = cv::Rect(DIM_X, DIM_Y, min(img.cols - DIM_X, DIM_X), min(img.rows - DIM_Y, DIM_Y));
-					uint64 hash = FNV_Full(img(rect));
+					uint64 hash = Murmur2_Full(img(rect));
 					if (image_hashes.insert(hash).second) images.push_back(new image(path, rect));
 				}
 			}
@@ -672,7 +762,6 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 
 			start_time = clock();
 			hash = FNV_Hash(img, coords);
-			hash = FNV_Hash(img, coords);
 			end_time = clock();
 			total_time += end_time - start_time;
 			hashmap[hash].insert(i);
@@ -760,7 +849,7 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 				cv::Mat img = images[i]->mat();
 				uint64 hash;
 
-				hash = FNV_Hash(img, coords);
+				hash = Murmur2_Hash(img, coords);
 				hashmap[hash].insert(i);
 			}
 
@@ -788,25 +877,21 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 			uint64 hash;
 
 			start_time = clock();
-			hash = FNV_Hash(img, coords);
+			hash = Murmur2_Hash(img, coords);
 			end_time = clock();
 			total_time += end_time - start_time;
 			hashmap[hash].insert(i);
 		}
 		avg_time = ((double)total_time) / images.size();
 
-		cout << "Low-Mode (" << coords.size() << "):  " << images.size() << " images; " << collisions << " collisions; ~" << avg_time << " ms per image" << endl;
-
 		// find the differing coordinates in images with hash collisions
 		ofstream collout;
 		collout.open((dest.parent_path() / "analysis_collisions.csv").string());
 		collisions = 0;
 		map<coord, int> collision_coords;
-		long total_differing = 0;
-		long total_difference = 0;
-		double avg_difference = 0;
 		for (pair<uint64, set<int>> hashset : hashmap) {
 			if (hashset.second.size() < 2) continue;
+			collisions += hashset.second.size() - 1;
 
 			// write collisions to collout
 			collout << hashset.first;
@@ -814,45 +899,7 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 				collout << "," << images[i]->path.stem().string() << " (" << FNV_Full(images[i]->mat()) << ")";
 			}
 			collout << endl;
-
-			set<int>::iterator iter2 = hashset.second.begin();
-			set<int>::iterator iter = hashset.second.begin();
-			set<int>::iterator end = hashset.second.end();
-			end--;
-			while (iter != end) {
-				iter2++;
-				cv::Mat img = images[*iter]->mat();
-				while (iter2 != hashset.second.end()) {
-					long differing = 0;
-					long difference = 0;
-					
-					cv::Mat img2 = images[*iter2++]->mat();
-					for (int y = 0; y < min(img.rows, img2.rows); y++) {
-						for (int x = 0; x < min(img.cols, img2.cols); x++) {
-							cv::Vec3b pixel = img.at<cv::Vec3b>(y, x);
-							cv::Vec3b pixel2 = img.at<cv::Vec3b>(y, x);
-							for (int c = 0; c < 3; c++) {
-								if (pixel[c] != pixel2[c]) {
-									differing++;
-									difference += abs(pixel[c] - pixel[c]);
-								}
-							}
-						}
-					}
-					cout << *iter << " vs " << *iter2 << ": " << differing <<
-						" differing pixels for a total of " << difference <<
-						" and an average difference of " << ((differing == 0) ? 0 : (((float)difference) / differing)) << endl;
-					total_differing += differing;
-					total_difference += difference;
-				}
-				iter2 = ++iter;
-			}
 		}
-		cout << "Differing Pixels: " << total_differing << endl;
-		cout << "Total Difference: " << total_difference << endl;
-		cout << "Average Difference: " << (((float)total_difference) / total_differing) << endl;
-		cout << "Differing/Collision: " << (((float)total_differing) / collisions) << endl;
-		cout << "Difference/Collision: " << (((float)total_difference) / collisions) << endl;
 	}
 
 	if (DO_COLANLYZ) {
@@ -961,7 +1008,7 @@ void Analyze_Collisions(fs::path analysis, fs::path dest)
 	map<uint64, set<int>> hashmap;
 	clock_t start_time, end_time, total_time;
 	double avg_time;
-	int collisions = 0;
+	long collisions = 0;
 
 	total_time = 0;
 	for (int i = 0; i < images.size(); i++) {
@@ -969,7 +1016,7 @@ void Analyze_Collisions(fs::path analysis, fs::path dest)
 		uint64 hash;
 
 		start_time = clock();
-		hash = FNV_Hash(img, FNV_COORDS, FNV_COORDS_LEN);
+		hash = Murmur2_Hash(img, FNV_COORDS, FNV_COORDS_LEN);
 		end_time = clock();
 		total_time += end_time - start_time;
 		hashmap[hash].insert(i);
@@ -981,11 +1028,12 @@ void Analyze_Collisions(fs::path analysis, fs::path dest)
 	collout.open(dest.string());
 	collisions = 0;
 	map<coord, int> collision_coords;
+	long coll_pairs = 0;
 	long total_differing = 0;
 	long total_difference = 0;
 	for (pair<uint64, set<int>> hashset : hashmap) {
 		if (hashset.second.size() < 2) continue;
-		collisions += hashset.second.size();
+		collisions += hashset.second.size() - 1;
 
 		// write collisions to collout
 		collout << hashset.first;
@@ -1019,32 +1067,30 @@ void Analyze_Collisions(fs::path analysis, fs::path dest)
 					}
 				}
 
-				if (differing == 0) {
-					if (hashset.second.size() == 2)
-						collisions--;
-					collisions--;
-				} else {
-					stringstream ss;
-					ss << *iter << " vs " << *iter2 << ": " << differing <<
-						" differing pixels for a total of " << difference <<
-						" and an average difference of " << ((differing == 0) ? 0 : ((double)difference) / differing);
-					cout << ss.str() << endl;
-					collout << ss.str() << endl;
-					total_differing += differing;
-					total_difference += difference;
+				if (differing > 0) {
+					coll_pairs++;
 				}
+
+				stringstream ss;
+				ss << *iter << " vs " << *iter2 << ": " << differing <<
+					" differing pixels for a total of " << difference <<
+					" and an average difference of " << ((differing == 0) ? 0 : ((double)difference) / differing);
+				cout << ss.str() << endl;
+				collout << ss.str() << endl;
+				total_differing += differing;
+				total_difference += difference;
 				iter2++;
 			}
 			collout << endl;
 			iter2 = ++iter;
 		}
 	}
-	cout << "Low-Mode (" << FNV_COORDS_LEN << "):  " << images.size() << " images; " << collisions << " collisions; ~" << avg_time << " ms per image" << endl;
+	cout << "Low-Mode (" << FNV_COORDS_LEN << "):  " << images.size() << " images; " << collisions << " collisions in " << coll_pairs << " pairs; ~" << avg_time << " ms per image" << endl;
 	cout << "Differing Pixels: " << total_differing << endl;
 	cout << "Total Difference: " << total_difference << endl;
 	cout << "Average Difference: " << ((total_differing == 0) ? 0 : (((double)total_difference) / total_differing)) << endl;
-	cout << "Differing/Collision: " << ((collisions == 0) ? 0 : (((double)total_differing) / collisions)) << endl;
-	cout << "Difference/Collision: " << ((collisions == 0) ? 0 : (((double)total_difference) / collisions)) << endl;
+	cout << "Differing/CollPair: " << ((coll_pairs == 0) ? 0 : (((double)total_differing) / coll_pairs)) << endl;
+	cout << "Difference/CollPair: " << ((coll_pairs == 0) ? 0 : (((double)total_difference) / coll_pairs)) << endl;
 }
 
 
