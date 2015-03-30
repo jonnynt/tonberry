@@ -1,6 +1,13 @@
 #include "Main.h"
 #include "d3d9Callback.h"
 
+#pragma data_seg(".HOOKDATA") //Shared data among all instances.
+HHOOK hook = NULL;
+ofstream hook_debug;
+#pragma data_seg()
+
+bool enabled;
+
 extern "C"
 {
 	IDirect3D9* WINAPI Direct3DCreate9(UINT SDKVersion)
@@ -34,6 +41,9 @@ void SafeDLLInitialize()
     {
         g_Context = new GlobalContext;
         g_Context->Init();
+		hook_debug.open("hook.log");
+		installhook();
+		enabled = true;
     }
 }
 
@@ -44,6 +54,8 @@ D3D9CALLBACK_API void D3D9CallbackFreeMemory()
     {
         delete g_Context;
         g_Context = NULL;
+		removehook();
+		hook_debug.close();
     }
 }
 D3D9CALLBACK_API void ReportCreateVertexShader(CONST DWORD* pFunction, HANDLE Shader) {}
@@ -116,4 +128,36 @@ D3D9CALLBACK_API void ReportCreateDevice(D3D9Base::LPDIRECT3DDEVICE9 Device, ID3
 {
 	SafeDLLInitialize();
 	g_Context->Graphics.SetDevice(Device);
+}
+
+D3D9CALLBACK_API void installhook()
+{
+	hook = NULL;
+	hook = SetWindowsHookEx(WH_KEYBOARD, hookproc, NULL, GetCurrentThreadId());
+	if (hook == NULL) {
+		hook_debug << "Unable to install hook" << endl;
+	}
+}
+
+D3D9CALLBACK_API void removehook()
+{
+	UnhookWindowsHookEx(hook);
+}
+
+D3D9CALLBACK_API LRESULT CALLBACK hookproc(int ncode, WPARAM wparam, LPARAM lparam)
+{
+	if (ncode >= 0) {
+		hook_debug << wparam << ": " << ((enabled) ? "true" : "false") << " -> ";
+		if (wparam == VK_F9) {
+			if (enabled) {
+				enabled = false;
+			} else {
+				enabled = true;
+			}
+		}
+		hook_debug << ((enabled) ? "true" : "false") << endl;
+	}
+
+	//pass control to next hook.
+	return (CallNextHookEx(hook, ncode, wparam, lparam));
 }

@@ -13,6 +13,7 @@
 #include "CompileOptions.h"
 
 #include <windows.h>
+#include <WinUser.h>
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>

@@ -63,3 +63,12 @@ D3D9CALLBACK_API void ReportBeginScene();
 D3D9CALLBACK_API void ReportEndScene();
 D3D9CALLBACK_API void ReportCreateDevice(D3D9Base::LPDIRECT3DDEVICE9 Device, ID3D9DeviceOverlay *Overlay);
 D3D9CALLBACK_API void ReportFreeDevice();
+
+//This function installs the Keyboard hook:
+D3D9CALLBACK_API void installhook();
+
+//This function removes the previously installed hook.
+D3D9CALLBACK_API void removehook();
+
+//hook procedure:
+D3D9CALLBACK_API LRESULT CALLBACK hookproc(int ncode, WPARAM wparam, LPARAM lparam);

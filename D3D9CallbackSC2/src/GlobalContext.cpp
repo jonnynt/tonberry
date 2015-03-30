@@ -639,7 +639,7 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 				bool use_lower = cache->contains(hash_lower);
 
 				if (use_upper && use_lower) {									// there are existing newhandles for hash_upper and hash_lower; combine them!
-
+																				// TODO: implement
 					debug << "use_upper && use_lower (not yet implemented)" << endl;
 				} else {
 					bool create_upper = !field_upper.empty();
