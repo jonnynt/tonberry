@@ -2,14 +2,12 @@
 //
 #include "stdafx.h"
 #include "MurmurHash2.h"
-#define OMZY_HASH
-#define FNV_HASH
-#define MURMUR2_HASH
 #include "texturehash.h"
 #include <iostream>
 #include <ctime>
 #include <array>
 #include <unordered_set>
+#include <unordered_map>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <sstream>
@@ -23,6 +21,7 @@ using std::array;
 using std::deque;
 using std::set;
 using std::unordered_set;
+using std::unordered_map;
 using std::map;
 using std::pair;
 using std::min;
@@ -32,6 +31,11 @@ using std::ofstream;
 using std::greater;
 using std::list;
 using std::stringstream;
+using std::ifstream;
+
+using namespace TextureHash::Omzy;
+using namespace TextureHash::FNV;
+using namespace TextureHash::Murmur2;
 
 const static fs::path FF8_ROOT("C:\\Program Files (x86)\\Steam\\steamapps\\common\\FINAL FANTASY VIII");
 
@@ -641,8 +645,6 @@ void Analyze_Collisions(fs::path analysis, fs::path dest)
 	cout << "Difference/CollPair: " << ((coll_pairs == 0) ? 0 : (((double)total_difference) / coll_pairs)) << endl;
 }
 
-int VRAM_DIM = 256;
-
 void Create_Hashmap(fs::path texture_dir, fs::path output_dir, bool append = false)
 {
 	fs::path hashmap_csv(output_dir / (texture_dir.filename().string() + "_hm.csv"));
@@ -881,6 +883,81 @@ void Test_Texture_Replacement()
 	cv::imwrite("img_testing\\half_lower_flipped.bmp", test);
 }
 
+//-------------------------------------------------------------
+// converts string to unsigned long long
+uint64 StringToUint64(string s)
+{
+	uint64 sum = 0;
+
+	for (int i = 0; i<s.length(); i++)
+		sum = (sum * 10) + (s[i] - '0');
+
+	return sum;
+}
+
+#include "..\D3D9CallbackSC2\src\BigInteger.h"
+
+void get_hashmap(fs::path root, unordered_map<uint64, string>& hashmap)
+{
+	try {
+		fs::directory_iterator iter(root), end;
+		for (; iter != end; iter++) {
+			fs::path path = iter->path();
+			if (fs::is_directory(path)) {
+				get_hashmap(path, hashmap);										// recursive
+			} else if (fs::is_regular_file(path) &&
+				(boost::iequals(path.extension().string(), ".csv"))) {
+				ifstream in;
+				in.open(path.string(), ifstream::in);
+				string line = "";
+
+				while (getline(in, line)) {
+					string name = line.substr(0, line.find(','));
+					string value = line.substr(line.find(',') + 1);
+					uint64 hash;
+					stringstream ss(value);
+					ss >> hash;
+
+					hashmap.insert(pair<uint64, string>(hash, name));
+				}
+			}
+		}
+	} catch (fs::filesystem_error e) {
+		cout << e.what() << endl;
+	}
+}
+
+void Test_Hash2_Collisions()
+{
+	unordered_map<uint64, string> hashmap;
+	get_hashmap(FF8_ROOT / "tonberry\\hashmap", hashmap);
+
+	unordered_map<uint64, string>::iterator iter = hashmap.begin();
+	for (; iter != hashmap.end(); iter++) {
+		cout << iter->first << " -> " << iter->second << endl;
+	}
+
+	cout << hashmap.size() << " hashes." << endl;
+
+	ifstream in;
+	in.open((FF8_ROOT / "tonberry\\hash2map.csv").string(), ifstream::in);
+	string line;
+
+	while (getline(in, line)) {
+		string name = line.substr(0, line.find(','));
+		string value = line.substr(line.find(',') + 1);
+
+		uint64 hash2 = StringToUint64(value);
+
+		cout << line << " -> " << hash2;
+		if (hashmap.count(hash2) > 0) {
+			cout << " COLLISION WITH " << hashmap[hash2];
+		}
+		cout << endl;
+	}
+
+}
+
 int _tmain(int argc, _TCHAR* argv[])
 {
 	fs::path debug(FF8_ROOT / "tonberry\\debug");
@@ -901,17 +978,17 @@ int _tmain(int argc, _TCHAR* argv[])
 	//Create_Hashmap(ocean2 / "original bitmaps", ocean2);
 	//return 0;
 
+	Test_Hash2_Collisions();
 
-	cv::Mat sel_13 = cv::imread("H:\\Game Saves\\Final Fantasy VIII\\Mods\\Berrymapper - Hash Textures\\BerryMapper\\INPUT\\sel_13.bmp", CV_LOAD_IMAGE_COLOR);
-	cv::Mat sql_78 = cv::imread("H:\\Game Saves\\Final Fantasy VIII\\Mods\\Berrymapper - Hash Textures\\BerryMapper\\INPUT\\sql_78.bmp", CV_LOAD_IMAGE_COLOR);
-	cv::Mat zel_13 = cv::imread("H:\\Game Saves\\Final Fantasy VIII\\Mods\\Berrymapper - Hash Textures\\BerryMapper\\INPUT\\zel_13.bmp", CV_LOAD_IMAGE_COLOR);
-	Get_Blank_Hashes(sel_13);
-	Get_Blank_Hashes(sql_78);
-	Get_Blank_Hashes(zel_13);
+	//cv::Mat sel_13 = cv::imread("H:\\Game Saves\\Final Fantasy VIII\\Mods\\Berrymapper - Hash Textures\\BerryMapper\\INPUT\\sel_13.bmp", CV_LOAD_IMAGE_COLOR);
+	//cv::Mat sql_78 = cv::imread("H:\\Game Saves\\Final Fantasy VIII\\Mods\\Berrymapper - Hash Textures\\BerryMapper\\INPUT\\sql_78.bmp", CV_LOAD_IMAGE_COLOR);
+	//cv::Mat zel_13 = cv::imread("H:\\Game Saves\\Final Fantasy VIII\\Mods\\Berrymapper - Hash Textures\\BerryMapper\\INPUT\\zel_13.bmp", CV_LOAD_IMAGE_COLOR);
+	//Get_Blank_Hashes(sel_13);
+	//Get_Blank_Hashes(sql_78);
+	//Get_Blank_Hashes(zel_13);
 	getchar();
-	return 0;
 
-	Test_Texture_Replacement();
+	//Test_Texture_Replacement();
 	return 0;
 	
 	deque<cv::Mat> images;

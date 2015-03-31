@@ -4,16 +4,6 @@
 #include <string>
 #include <sstream>
 
-template <>
-struct std::hash<HashCoord>
-{
-	std::size_t operator()(const HashCoord& key) const
-	{
-		// Compute individual hash values for x, y, and c and combine them using XOR and bit shifting:
-		return ((hash<int>()(key.x) ^ (hash<int>()(key.y) << 1)) >> 1) ^ (hash<int>()(key.c) << 1);
-	}
-};
-
 class HashCoord
 {
 public:
@@ -59,6 +49,16 @@ public:
 		}
 		ss << ")";
 		return ss.str();
+	}
+};
+
+template <>
+struct std::hash<HashCoord>
+{
+	std::size_t operator()(const HashCoord& key) const
+	{
+		// Compute individual hash values for x, y, and c and combine them using XOR and bit shifting:
+		return ((hash<int>()(key.x) ^ (hash<int>()(key.y) << 1)) >> 1) ^ (hash<int>()(key.c) << 1);
 	}
 };
 
