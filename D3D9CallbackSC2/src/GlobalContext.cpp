@@ -592,6 +592,18 @@ uint64_t parsesysfld(const string & texname){
 	return hash;
 }
 
+//-------------------------------------------------------------
+// converts string to unsigned long long
+uint64_t StringToUint64(string s)
+{
+	uint64_t sum = 0;
+
+	for (int i = 0; i<s.length(); i++)
+		sum = (sum * 10) + (s[i] - '0');
+
+	return sum;
+}
+
 int m;
 
 //Final unlockrect
@@ -630,7 +642,8 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
         } else { //Texture FOUND in Hash_Algorithm_1 OR is a COLLISION
             if (match == Matchtype::COLLISION) { //Run Hash_Algorithm_2
                 Hash_Algorithm_2(pData, pitch, Desc.Width, Desc.Height);
-                texturename = getfield2(texturename);
+                match = getfield2(texturename);
+				hash = StringToUint64(hashval2.getNumber());
                 if (match == Matchtype::NOMATCH2) { 
 					texcache->erase(Handle);
 					debugtype = String("nomatch2"); 
