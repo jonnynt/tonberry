@@ -276,6 +276,7 @@ void GlobalContext::Init ()
 	loadcoll2file();
 	loadobjfile();
 	initCache();//has to be called after loadprefs() so we get the propper cache_size!
+	enable_settexture = enable_unlockrect = true;
 }
 
 void Hash_Algorithm_1 (BYTE* pData, UINT pitch, int width, int height)	//hash algorithm that preferences top and left sides
@@ -609,6 +610,11 @@ int m;
 //Final unlockrect
 void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE Handle) //note BmpUseless
 {
+	if (!enable_unlockrect) {
+		texcache->erase(Handle);
+		return;
+	}
+
     IDirect3DTexture9* pTexture = (IDirect3DTexture9*)Handle;   
 
     String debugtype = String("error");
@@ -703,6 +709,7 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 
 bool GlobalContext::SetTexture(DWORD Stage, HANDLE* SurfaceHandles, UINT SurfaceHandleCount)
 {
+	if (!enable_settexture) return false;
 #if DEBUG
 	StartCounter();
 #endif

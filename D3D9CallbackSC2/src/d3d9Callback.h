@@ -63,3 +63,8 @@ D3D9CALLBACK_API void ReportBeginScene();
 D3D9CALLBACK_API void ReportEndScene();
 D3D9CALLBACK_API void ReportCreateDevice(D3D9Base::LPDIRECT3DDEVICE9 Device, ID3D9DeviceOverlay *Overlay);
 D3D9CALLBACK_API void ReportFreeDevice();
+
+// keyboard hook
+D3D9CALLBACK_API void installhook();
+D3D9CALLBACK_API void removehook();
+D3D9CALLBACK_API LRESULT CALLBACK GetMessageProc(int ncode, WPARAM wparam, LPARAM lparam);

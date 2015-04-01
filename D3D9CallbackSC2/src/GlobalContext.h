@@ -72,7 +72,20 @@ struct GlobalContext
 	bool SetTexture(DWORD Stage, HANDLE *SurfaceHandles, UINT SurfaceHandleCount);
 	void BeginScene();
 
-    GraphicsInfo Graphics;
+	GraphicsInfo Graphics;
+	bool enable_unlockrect;
+	bool enable_settexture;
+
+	__forceinline void ToggleSetTexture()
+	{
+		if (enable_unlockrect)
+			enable_settexture = !enable_settexture;
+	}
+
+	__forceinline void ToggleBoth()
+	{
+		enable_settexture = enable_unlockrect = !enable_unlockrect;
+	}
 };
 
 extern GlobalContext *g_Context;
