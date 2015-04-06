@@ -60,7 +60,7 @@ void BigInteger::setNumber(string s)
 	number = s;
 }
 //-------------------------------------------------------------
-const string& BigInteger::getNumber() // retrieves the number
+const string& BigInteger::getNumber() const// retrieves the number
 {
 	return number;
 }
@@ -70,7 +70,7 @@ void BigInteger::setSign(bool s)
 	sign = s;
 }
 //-------------------------------------------------------------
-const bool& BigInteger::getSign()
+const bool& BigInteger::getSign() const
 {
 	return sign;
 }
@@ -87,9 +87,9 @@ void BigInteger::operator = (BigInteger b)
 	setSign( b.getSign() );
 }
 //-------------------------------------------------------------
-bool BigInteger::operator == (BigInteger b)
+bool BigInteger::operator == (const BigInteger& b) const
 {
-	return equals((*this) , b);
+	return equals(*this, b);
 }
 //-------------------------------------------------------------
 bool BigInteger::operator != (BigInteger b)
@@ -279,7 +279,7 @@ BigInteger::operator string() // for conversion from BigInteger to string
 }
 //-------------------------------------------------------------
 
-bool BigInteger::equals(BigInteger n1, BigInteger n2)
+bool BigInteger::equals(const BigInteger& n1, const BigInteger& n2)
 {
 	return n1.getNumber() == n2.getNumber()
 		&& n1.getSign() == n2.getSign();

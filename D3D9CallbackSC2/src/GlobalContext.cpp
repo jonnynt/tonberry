@@ -86,6 +86,15 @@ T ToNumber(const std::string& Str)	//convert string to unsigned long long -> uin
 	S >> Number;
     return Number;
 }
+
+struct BigInteger_Hash
+{
+	size_t operator()(const BigInteger& b) const
+	{
+		return std::hash<string>()(b.getNumber());
+	}
+};
+
 //Debug control variable
 bool debugmode = false;
 
@@ -98,7 +107,8 @@ int pixval2[98];
 int objval[64];
 unordered_map<uint64_t, string> hashmap;	//Hashmap of unique hashvals 
 unordered_map<uint64_t, string> collmap;	//Hashmap of collision duplicates
-unordered_map<string, string> coll2map;	//Hashmap of collision hashvals after algorithm 2
+unordered_map<BigInteger, uint64_t, BigInteger_Hash> hash2map;			//Map of hashval2 -> StringToUint64(hashval2)
+unordered_map<string, string> coll2map;
 unordered_map<uint64_t, string> objmap;
 unordered_map<uint64_t, string>::iterator it;
 unordered_map<string, string>::iterator it2;
@@ -203,6 +213,18 @@ void loadcollfile ()	//Expects collisions.csv to be in ff8/tonberry directory
 	}
 }
 
+//-------------------------------------------------------------
+// converts string to unsigned long long
+uint64_t StringToUint64(string s)
+{
+	uint64_t sum = 0;
+
+	for (int i = 0; i<s.length(); i++)
+		sum = (sum * 10) + (s[i] - '0');
+
+	return sum;
+}
+
 void loadcoll2file ()	//Expects hash2map.csv to be in ff8/tonberry directory
 {
 	ifstream coll2file;
@@ -217,6 +239,7 @@ void loadcoll2file ()	//Expects hash2map.csv to be in ff8/tonberry directory
 			string valuestr = line.substr(comma + 1, line.length()).c_str();
 			//BigInteger value = BigInteger(valuestr);
 			//value = ToNumber<BigInt>(valuestr);
+			hash2map.insert(pair<BigInteger, uint64_t>(valuestr, StringToUint64(valuestr)));
 			coll2map.insert(pair<string, string>(valuestr, field)); //key, value for unique names, value, key for unique hashvals
 		}
 		coll2file.close();
@@ -495,7 +518,7 @@ Matchtype getfield (uint64_t & hash, string & texname)	//simple sequential bit c
 	return getobj(hash, texname);
 }
 
-Matchtype getfield2 (string & texname)	//simple sequential bit comparisons, algorithm 2
+Matchtype getfield2 (uint64_t & hash, string & texname)	//simple sequential bit comparisons, algorithm 2
 {
 	hashval2 = 0;
 	int lastpixel = pixval2[97];
@@ -506,8 +529,9 @@ Matchtype getfield2 (string & texname)	//simple sequential bit comparisons, algo
 		lastpixel = pixval2[i];
     }
 	it2 = coll2map.find(hashval2.getNumber());
-	if (it2 != coll2map.end()) { 
+	if (it2 != coll2map.end()) {
 		texname = it2->second; 
+		hash = hash2map[hashval2];
 		return Matchtype::MATCH;
 	}
 	return Matchtype::NOMATCH2;
@@ -592,18 +616,6 @@ uint64_t parsesysfld(const string & texname){
 	return hash;
 }
 
-//-------------------------------------------------------------
-// converts string to unsigned long long
-uint64_t StringToUint64(string s)
-{
-	uint64_t sum = 0;
-
-	for (int i = 0; i<s.length(); i++)
-		sum = (sum * 10) + (s[i] - '0');
-
-	return sum;
-}
-
 int m;
 
 //Final unlockrect
@@ -642,8 +654,8 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
         } else { //Texture FOUND in Hash_Algorithm_1 OR is a COLLISION
             if (match == Matchtype::COLLISION) { //Run Hash_Algorithm_2
                 Hash_Algorithm_2(pData, pitch, Desc.Width, Desc.Height);
-                match = getfield2(texturename);
-				hash = StringToUint64(hashval2.getNumber());
+                match = getfield2(hash, texturename);
+				//hash = StringToUint64(hashval2.getNumber());
                 if (match == Matchtype::NOMATCH2) { 
 					texcache->erase(Handle);
 					debugtype = String("nomatch2"); 

@@ -14,12 +14,12 @@ public:
 	BigInteger(string s, bool sin); // "string" constructor
 	BigInteger(int n); // "int" constructor
 	void setNumber(string s);
-	const string& getNumber(); // retrieves the number
+	const string& getNumber() const; // retrieves the number
 	void setSign(bool s);
-	const bool& getSign();
+	const bool& getSign() const;
 	BigInteger absolute(); // returns the absolute value
 	void operator = (BigInteger b);
-	bool operator == (BigInteger b);
+	bool operator == (const BigInteger& b) const;
 	bool operator != (BigInteger b);
 	bool operator > (BigInteger b);
 	bool operator < (BigInteger b);
@@ -43,7 +43,7 @@ public:
 	BigInteger operator -(); // unary minus sign
 	operator string(); // for conversion from BigInteger to string
 private:
-	bool equals(BigInteger n1, BigInteger n2);
+	static bool equals(const BigInteger& n1, const BigInteger& n2);
 	bool less(BigInteger n1, BigInteger n2);
 	bool greater(BigInteger n1, BigInteger n2);
 	string add(string number1, string number2);
