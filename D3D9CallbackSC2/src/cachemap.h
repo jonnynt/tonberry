@@ -32,11 +32,6 @@ private:
 	size_t				max_size;
 	size_t				entries;
 
-	/*fastupdate: inserts replaced :-> hash into the handlecache cache.
-		PRECONDITION: nh_map[hash] exists.
-	*/
-	void fastupdate(nhcache_map_iter replaced);
-
 	void map_insert(uint64_t hash,				// nh_map key		- the hash
 					HANDLE replaced				// handlecache key	- will point to the new entry in nh_map
 	);
@@ -55,12 +50,6 @@ public:
 	returns: true if HANDLE is in the handlecache map, else false
 	*/
 	bool TextureCache::contains(HANDLE replaced	// the HANDLE to find
-		);
-
-	/*at: access an element in the nhcache
-	  returns: a reference to the HANDLE mapped to hash in the nhcache if it exists, or else null
-	*/
-	HANDLE TextureCache::at(uint64_t hash	// the hash key
 		);
 	
 	/*at: access an element in the handlecache

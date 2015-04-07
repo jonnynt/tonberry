@@ -5,7 +5,14 @@
 #include <boost\filesystem.hpp>
 #include <Windows.h>
 
+#include <unordered_set>
+
 #define DEBUG 0
+#define GCONTEXT_DEBUG 1
+
+#if GCONTEXT_DEBUG
+string gcontext_debug_file = "tonberry\\debug\\global_context.log";
+#endif
 
 #if DEBUG
 double PCFreq = 0.0;
@@ -54,8 +61,7 @@ GlobalContext *g_Context;
 typedef enum {
 	MATCH		= 0,
 	NOMATCH		= 1,
-	NOMATCH2	= 2,
-	COLLISION	= 3
+	COLLISION	= 2
 }Matchtype;
 
 void GraphicsInfo::Init()
@@ -112,6 +118,8 @@ unordered_map<string, string> coll2map;
 unordered_map<uint64_t, string> objmap;
 unordered_map<uint64_t, string>::iterator it;
 unordered_map<string, string>::iterator it2;
+unordered_set<uint64_t> sysfld_hashes;	// holds sysfld hashes
+unordered_set<uint64_t> iconfl_hashes;	// holds iconfl hashes
 uint64_t hashval; //current hashval of left half of memory
 uint64_t objtop; //object in top left corner of memory
 uint64_t objbot; //object in bottom left corner of memory
@@ -151,56 +159,108 @@ void loadprefs ()
 		}
 		prefsfile.close();
 	}
-	ofstream check;
-	check.open("tonberry\\tests\\testprefs.txt", ofstream::out);
-	check << "Texdir is: " << texdir;
-	check.close();
+
+#if GCONTEXT_DEBUG
+	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
+	debug << endl;
+	debug << "Preferences:" << endl;
+	debug << "  resize_factor = " << resize_factor << endl;
+	debug << "  debugmode = " << ((debugmode) ? "yes" : "no") << endl;
+	debug << "  cache_size = " << cache_size << endl;
+	debug << "  texdir = " << texdir << endl;
+	debug.close();
+#endif
 }
 
 //Mod Jay
 void loadhashfile ()	//Expects hash1map folder to be in ff8/tonberry directory
 {
+#if GCONTEXT_DEBUG
+	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
+	debug << endl;
+	debug << "Hashmap:" << endl;
+#endif
+
 	fs::path hashpath("tonberry/hashmap");
-	if(!fs::exists(hashpath)){
+	if (!fs::exists(hashpath)) {
 		ofstream err;								//Error reporting file
 		err.open("tonberry/error.txt", ofstream::out | ofstream::app);
 		err << "Error: hashmap folder doesn't exist\n";
 		err.close();
-	}else{
+	} else {
 		fs::directory_iterator end_it;				//get tonberry/hashmap folder iterator
-		for(fs::directory_iterator it(hashpath); it!=end_it; it++){
-			if(fs::is_regular_file(it->status())){	//if we got a regular file
-				if(it->path().extension() == ".csv"){	//we check its extension, if .csv file:
+
+
+		for (fs::directory_iterator it(hashpath); it != end_it; it++) {
+			if (fs::is_regular_file(it->status())) {	//if we got a regular file
+				if (it->path().extension() == ".csv") {	//we check its extension, if .csv file:
+#if GCONTEXT_DEBUG
+					debug << "  Reading " << it->path().filename().string() << "...";
+					debug.flush();
+					size_t size_before = hashmap.size();
+#endif
 
 					ifstream hashfile;
-					hashfile.open (it->path().string(), ifstream::in);	//open it and dump into the map
+					hashfile.open(it->path().string(), ifstream::in);	//open it and dump into the map
 					string line;
-					if (hashfile.is_open())
-					{
-						while ( getline(hashfile, line) ) //Omzy's original code
+					if (hashfile.is_open()) {
+						while (getline(hashfile, line)) //Omzy's original code
 						{
 							int comma = line.find(",");
 							string field = line.substr(0, comma);
 							string valuestr = line.substr(comma + 1, line.length()).c_str();
 							uint64_t value = ToNumber<uint64_t>(valuestr);
 							hashmap.insert(pair<uint64_t, string>(value, field)); //key, value for unique names, value, key for unique hashvals
+
+							if (field.length() >= 6) {
+								string chars = field.substr(0, 6);
+								if (chars == "sysfld") { //Exception for sysfld00 and sysfld01
+									sysfld_hashes.insert(value);
+								} else if (chars == "iconfl") { //Exception for iconfl00, iconfl01, iconfl02, iconfl03, iconflmaster
+									iconfl_hashes.insert(value);
+								}
+							}
 						}
 						hashfile.close();
 					}
 
+#if GCONTEXT_DEBUG
+					debug << " found " << (hashmap.size() - size_before) << " hashes." << endl;
+#endif
 				}
 			}
 		}
 	}
+
+#if GCONTEXT_DEBUG
+	debug << "  hashmap.size() = " << hashmap.size() << endl;
+	debug << "  sysfld_hashes.size() = " << sysfld_hashes.size() << ":" << endl;
+	for (uint64_t sysfld_hash : sysfld_hashes)
+		debug << "    " << sysfld_hash << endl;
+	debug << "  iconfl_hashes.size() = " << iconfl_hashes.size() << ":" << endl;
+	for (uint64_t iconfl_hash : iconfl_hashes)
+		debug << "    " << iconfl_hash << endl;
+	debug.close();
+#endif
 }
 
 void loadcollfile ()	//Expects collisions.csv to be in ff8/tonberry directory
 {
+#if GCONTEXT_DEBUG
+	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
+	debug << endl;
+	debug << "Collisions:" << endl;
+#endif
+
 	ifstream collfile;
 	collfile.open ("tonberry\\collisions.csv", ifstream::in);
 	string line;
 	if (collfile.is_open())
 	{
+#if GCONTEXT_DEBUG
+		debug << "  Reading collisions.csv...";
+		debug.flush();
+#endif
 		while ( getline(collfile, line) ) //~10000 total number of 128x256 texture blocks in ff8
 		{
 			int comma = line.find(",");
@@ -210,7 +270,14 @@ void loadcollfile ()	//Expects collisions.csv to be in ff8/tonberry directory
 			collmap.insert(pair<uint64_t, string>(value, field)); //key, value for unique names, value, key for unique hashvals
 		}
 		collfile.close();
+#if GCONTEXT_DEBUG
+		debug << " found " << collmap.size() << " hashes." << endl;
+#endif
 	}
+
+#if GCONTEXT_DEBUG
+	debug.close();
+#endif
 }
 
 //-------------------------------------------------------------
@@ -227,11 +294,21 @@ uint64_t StringToUint64(string s)
 
 void loadcoll2file ()	//Expects hash2map.csv to be in ff8/tonberry directory
 {
+#if GCONTEXT_DEBUG
+	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
+	debug << endl;
+	debug << "Hash2:" << endl;
+#endif
+
 	ifstream coll2file;
 	coll2file.open ("tonberry\\hash2map.csv", ifstream::in);
 	string line;
 	if (coll2file.is_open())
 	{
+#if GCONTEXT_DEBUG
+		debug << "  Reading hash2map.csv...";
+		debug.flush();
+#endif
 		while ( getline(coll2file, line) ) //~10000 total number of 128x256 texture blocks in ff8
 		{
 			int comma = line.find(",");
@@ -243,29 +320,46 @@ void loadcoll2file ()	//Expects hash2map.csv to be in ff8/tonberry directory
 			coll2map.insert(pair<string, string>(valuestr, field)); //key, value for unique names, value, key for unique hashvals
 		}
 		coll2file.close();
+#if GCONTEXT_DEBUG
+		debug << " found " << hash2map.size() << " hashes." << endl;
+#endif
 	}
+
+#if GCONTEXT_DEBUG
+	debug.close();
+#endif
 }
 
 //Mod Jay
 void loadobjfile ()	//Expects objmap.csv to be in ff8/tonberry directory
 {
+#if GCONTEXT_DEBUG
+	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
+	debug << endl;
+	debug << "Objects:" << endl;
+#endif
 	fs::path hashpath("tonberry/objmap");
-	if(!fs::exists(hashpath)){
+	if (!fs::exists(hashpath)) {
 		ofstream err;								//Error reporting file
 		err.open("tonberry/error.txt", ofstream::out | ofstream::app);
 		err << "Error: objmap folder doesn't exist\n";
 		err.close();
-	}else{
+	} else {
 		fs::directory_iterator end_it;
-		for(fs::directory_iterator it(hashpath); it!=end_it; it++){
-			if(fs::is_regular_file(it->status())){	//if we got a regular file
-				if(it->path().extension() == ".csv"){	//we check its extension, if .csv file:
-				
+		for (fs::directory_iterator it(hashpath); it != end_it; it++) {
+			if (fs::is_regular_file(it->status())) {	//if we got a regular file
+				if (it->path().extension() == ".csv") {	//we check its extension, if .csv file:
+#if GCONTEXT_DEBUG
+					debug << "  Reading " << it->path().filename().string() << "...";
+					debug.flush();
+					size_t size_before = objmap.size();
+#endif
+
 					ifstream objfile;
-					objfile.open (it->path().string(), ifstream::in);
+					objfile.open(it->path().string(), ifstream::in);
 					string line;
-					if (objfile.is_open()){
-						while ( getline(objfile, line) ){
+					if (objfile.is_open()) {
+						while (getline(objfile, line)) {
 							int comma = line.find(",");
 							string obj = line.substr(0, comma);
 							string valuestr = line.substr(comma + 1, line.length()).c_str();
@@ -275,11 +369,21 @@ void loadobjfile ()	//Expects objmap.csv to be in ff8/tonberry directory
 						objfile.close();
 					}
 
+#if GCONTEXT_DEBUG
+					debug << " found " << (objmap.size() - size_before) << " hashes." << endl;
+#endif
 				}
 			}
 		}
 	}
+
+#if GCONTEXT_DEBUG
+	debug << "  objmap.size() = " << objmap.size() << endl;
+	debug.close();
+#endif
 }
+
+int m;
 
 void GlobalContext::Init ()
 {
@@ -292,6 +396,12 @@ void GlobalContext::Init ()
 	_RPT0(_CRT_ERROR,"file message\n");
 	CloseHandle(hLogFile);*/
 	//------------
+#if GCONTEXT_DEBUG
+	ofstream debug(gcontext_debug_file, fstream::out | fstream::trunc);
+	debug << "Initialized" << endl;
+	debug.close();
+#endif
+
     Graphics.Init();
 	loadprefs();
 	loadhashfile();
@@ -299,6 +409,8 @@ void GlobalContext::Init ()
 	loadcoll2file();
 	loadobjfile();
 	initCache();//has to be called after loadprefs() so we get the propper cache_size!
+
+	m = 0; // debug
 }
 
 void Hash_Algorithm_1 (BYTE* pData, UINT pitch, int width, int height)	//hash algorithm that preferences top and left sides
@@ -391,6 +503,11 @@ Matchtype getsysfld (BYTE* pData, UINT pitch, int width, int height, string & sy
 {
 	UINT x = 177;
 	UINT y = 155;
+
+	if (width <= x || height <= y) {
+		return Matchtype::NOMATCH;
+	}
+
 	string tempstr = sysfld;
 	RGBColor* CurRow = (RGBColor*)(pData + (y) * pitch);
 	RGBColor Color = CurRow[x];
@@ -421,6 +538,10 @@ Matchtype geticonfl (BYTE* pData, UINT pitch, int width, int height, string & ic
 	else if (iconfl == "iconfl02_13") { x = 216; y = 108; }
 	else if (iconfl == "iconfl03_13") { x = 58; y = 76; }
 	else if (iconfl == "iconflmaster_13") { x = 215; y = 103; }
+
+	if (width <= x || height <= y) {
+		return Matchtype::NOMATCH;
+	}
 
 	RGBColor* CurRow = (RGBColor*)(pData + (y) * pitch);
 	RGBColor Color = CurRow[x];
@@ -534,7 +655,7 @@ Matchtype getfield2 (uint64_t & hash, string & texname)	//simple sequential bit 
 		hash = hash2map[hashval2];
 		return Matchtype::MATCH;
 	}
-	return Matchtype::NOMATCH2;
+	return Matchtype::NOMATCH;
 }
 
 uint64_t parseiconfl(const string & texname){ 
@@ -543,80 +664,56 @@ uint64_t parseiconfl(const string & texname){
 	string token;
 	ofstream check;
 
-	token = texname.substr(6, 2 );
-	if(token == "ma"){//iconflmaster_XX
-		hash += 11111111111111100000;	
-	}
-	else if(token == "00"){
+	token = texname.substr(6, 2);
+	if (token == "ma") {//iconflmaster_XX
+		hash += 11111111111111100000;
+	} else if (token == "00") {
 		hash += 2222222220000000000;
-	}
-	else if(token == "01"){
+	} else if (token == "01") {
 		hash += 3333333330000000000;
-	}
-	else if(token == "02"){
+	} else if (token == "02") {
 		hash += 4444444440000000000;
-	}
-	else if(token == "03"){
+	} else if (token == "03") {
 		hash += 5555555550000000000;
 	}
 
-	token = texname.substr( texname.find("_")+1 );
-	
-	if(token == "13") hash += 13;
-	else if(token == "14") hash += 14;
-	else if(token == "15") hash += 99;//aqui
-	else if(token == "16") hash += 16;
-	else if(token == "17") hash += 17;
-	else if(token == "18") hash += 18;
-	else if(token == "19") hash += 19;
-	else if(token == "20") hash += 20;
-	else if(token == "21") hash += 21;
-	else if(token == "22") hash += 22;
-	else if(token == "23") hash += 23;
-	else if(token == "24") hash += 24;
-	else if(token == "25") hash += 25;
-	else if(token == "26") hash += 26;
-	else if(token == "27") hash += 27;
-	else if(token == "28") hash += 28;
+	token = texname.substr(texname.find("_") + 1);
+	int num;
+	try {
+		num = stoi(token);
+	} catch (exception&) {
+		return hash;
+	}
+
+	hash += (num != 15) ? num : 99;
 
 	return hash;
 }
 
-uint64_t parsesysfld(const string & texname){
+uint64_t parsesysfld(const string & texname) {
 	uint64_t hash = 0;
 	string token;
 	ofstream check;
 
-	token = texname.substr(6, 2 );
-	if(token == "00"){
+	token = texname.substr(6, 2);
+	if (token == "00") {
 		hash += 6666666660000000000;
-	}
-	else if(token == "01"){
+	} else if (token == "01") {
 		hash += 7777777770000000000;
 	}
-	token = texname.substr( texname.find("_")+1 );
 
-	if(token == "13") hash += 13;
-	else if(token == "14") hash += 14;
-	else if(token == "15") hash += 15;//aqui
-	else if(token == "16") hash += 16;
-	else if(token == "17") hash += 17;
-	else if(token == "18") hash += 18;
-	else if(token == "19") hash += 19;
-	else if(token == "20") hash += 20;
-	else if(token == "21") hash += 21;
-	else if(token == "22") hash += 22;
-	else if(token == "23") hash += 23;
-	else if(token == "24") hash += 24;
-	else if(token == "25") hash += 25;
-	else if(token == "26") hash += 26;
-	else if(token == "27") hash += 27;
-	else if(token == "28") hash += 28;
+	token = texname.substr(texname.find("_") + 1);
+	int num;
+	try {
+		num = stoi(token);
+	} catch (exception&) {
+		return hash;
+	}
+
+	hash += num;
 
 	return hash;
 }
-
-int m;
 
 //Final unlockrect
 void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE Handle) //note BmpUseless
@@ -624,8 +721,13 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
     IDirect3DTexture9* pTexture = (IDirect3DTexture9*)Handle;   
 
     String debugtype = String("error");
+
+#if GCONTEXT_DEBUG
+	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
+	debug << endl << m << " (" << Handle << "): " << endl;
+#endif
 	
-    if (pTexture && Desc.Width < 640 && Desc.Height < 480 && Desc.Format == D3DFORMAT::D3DFMT_A8R8G8B8 && Desc.Pool == D3DPOOL::D3DPOOL_MANAGED)    //640x480 are video
+    if (pTexture && Desc.Width < 640 && Desc.Height < 480 && Desc.Format == D3DFORMAT::D3DFMT_A8R8G8B8 && Desc.Pool == D3DPOOL::D3DPOOL_MANAGED)    // 640x480 are video
     {
         D3DLOCKED_RECT Rect;
         pTexture->LockRect(0, &Rect, NULL, 0);
@@ -635,42 +737,95 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
         uint64_t hash;
 		string texturename;
 		Matchtype match;
-        Hash_Algorithm_1(pData, pitch, Desc.Width, Desc.Height);    //Run Hash_Algorithm_1
+        Hash_Algorithm_1(pData, pitch, Desc.Width, Desc.Height);				// Run Hash_Algorithm_1
         match = getfield(hash, texturename);
 
-        if (texturename == "sysfld00_13" || texturename == "sysfld01_13") { //Exception for sysfld00 and sysfld01
-			match = getsysfld(pData, pitch, Desc.Width, Desc.Height, texturename); 
-			hash = parsesysfld(texturename);
-		} 
-        if (texturename == "iconfl00_13" || texturename == "iconfl01_13" || texturename == "iconfl02_13" || texturename == "iconfl03_13" || texturename == "iconflmaster_13") { //Exception for iconfl00, iconfl01, iconfl02, iconfl03, iconflmaster
-			match = geticonfl(pData, pitch, Desc.Width, Desc.Height, texturename); 
-			hash = parseiconfl(texturename);
+#if GCONTEXT_DEBUG
+		debug << "  getfield - ";
+		debug.flush();
+		switch (match) {
+		case Matchtype::MATCH: debug << "MATCH:"; break;
+		case Matchtype::NOMATCH: debug << "NOMATCH:"; break;
+		case Matchtype::COLLISION: debug << "COLLISION:"; break;
+		}
+		debug << " " << hash << endl;
+#endif
+
+        if (sysfld_hashes.count(hash) > 0) {									// Exception for sysfld00 and sysfld01
+			if ((match = getsysfld(pData, pitch, Desc.Width, Desc.Height, texturename)) == Matchtype::MATCH) 
+				hash = parsesysfld(texturename);
+#if GCONTEXT_DEBUG
+			debug << "  getsysfld - ";
+			debug.flush();
+			switch (match) {
+			case Matchtype::MATCH: debug << "MATCH:"; break;
+			case Matchtype::NOMATCH: debug << "NOMATCH:"; break;
+			case Matchtype::COLLISION: debug << "COLLISION?"; break;
+			}
+			debug << " " << hash << endl;
+#endif
+		} else if (iconfl_hashes.count(hash) > 0) {								// Exception for iconfl00, iconfl01, iconfl02, iconfl03, iconflmaster
+			if ((match = geticonfl(pData, pitch, Desc.Width, Desc.Height, texturename)) == Matchtype::MATCH)
+				hash = parseiconfl(texturename);
+#if GCONTEXT_DEBUG
+			debug << "  geticonfl - ";
+			debug.flush();
+			switch (match) {
+			case Matchtype::MATCH: debug << "MATCH:"; break;
+			case Matchtype::NOMATCH: debug << "NOMATCH:"; break;
+			case Matchtype::COLLISION: debug << "COLLISION?"; break;
+			}
+			debug << " " << hash << endl;
+#endif
 		} 
         
-        if (match == Matchtype::NOMATCH)
-        { //Handle inválido, lo borro, pero no su posible textura asociada.
+		if (match == Matchtype::NOMATCH) {										// Handle inválido, lo borro, pero no su posible textura asociada.
 			texcache->erase(Handle);
-            debugtype = String("nomatch");
-        } else { //Texture FOUND in Hash_Algorithm_1 OR is a COLLISION
-            if (match == Matchtype::COLLISION) { //Run Hash_Algorithm_2
-                Hash_Algorithm_2(pData, pitch, Desc.Width, Desc.Height);
-                match = getfield2(hash, texturename);
-				//hash = StringToUint64(hashval2.getNumber());
-                if (match == Matchtype::NOMATCH2) { 
+			debugtype = String("nomatch");
+		} else {																// Texture FOUND in Hash_Algorithm_1 OR is a COLLISION
+			if (match == Matchtype::COLLISION) { // Run Hash_Algorithm_2
+				Hash_Algorithm_2(pData, pitch, Desc.Width, Desc.Height);
+				match = getfield2(hash, texturename);
+				// hash = StringToUint64(hashval2.getNumber());
+				if (match == Matchtype::NOMATCH) {
 					texcache->erase(Handle);
-					debugtype = String("nomatch2"); 
+					debugtype = String("nomatch2");
 				}
-            }
+#if GCONTEXT_DEBUG
+				debug << "  getfield2 - ";
+				debug.flush();
+				switch (match) {
+				case Matchtype::MATCH: debug << "MATCH:"; break;
+				case Matchtype::NOMATCH: debug << "NOMATCH:"; break;
+				case Matchtype::COLLISION: debug << "COLLISION?"; break;
+				}
+				debug << " " << hash << endl;
+#endif
+			}
 
 			if (match == Matchtype::MATCH) {
 				debugtype = String("replaced");
-				if (!texcache->update(Handle, hash)) { //directly updated if it succeeds we just end unlockrect cycle.
+				if (!texcache->update(Handle, hash)) {							// directly updated if it succeeds we just end unlockrect cycle.
 					string filename = texdir + "textures\\" + texturename.substr(0, 2) + "\\" + texturename.substr(0, texturename.rfind("_")) + "\\" + texturename + ".png";
+
+#if GCONTEXT_DEBUG
+					debug << "  Reading " << filename << "...";
+					debug.flush();
+#endif
+
 					ifstream ifile(filename);
 					if (ifile.fail()) {
 						texcache->erase(Handle);
-						debugtype = String("noreplace"); //No file, allow normal SetTexture
-					} else {    //Load texture into cache
+						debugtype = String("noreplace");						// No file, allow normal SetTexture
+#if GCONTEXT_DEBUG
+						debug << " failed." << endl;
+#endif
+					} else {													// Load texture into cache
+#if GCONTEXT_DEBUG
+						debug << " succeeded." << endl;
+						debug << "  Creating new texture...";
+						debug.flush();
+#endif
 						LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
 						IDirect3DTexture9* newtexture;
 						Bitmap Bmp;
@@ -684,31 +839,53 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 						BYTE* newData = (BYTE *)newRect.pBits;
 						for (UINT y = 0; y < Bmp.Height(); y++) {
 							RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
-							for (UINT x = 0; x < Bmp.Width(); x++)   //works for textures of any size (e.g. 4-bit indexed)
-							{
-								RGBColor Color = Bmp[Bmp.Height() - y - 1][x];  //must flip image
+							for (UINT x = 0; x < Bmp.Width(); x++) {			// works for textures of any size (e.g. 4-bit indexed)
+								RGBColor Color = Bmp[Bmp.Height() - y - 1][x];  // must flip image
 								CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
 							}
 						}
-						newtexture->UnlockRect(0); //Texture loaded
-						HANDLE tempnewhandle = (HANDLE)newtexture;
-						texcache->insert(Handle, hash, tempnewhandle);
+						newtexture->UnlockRect(0);								// Texture loaded
+						HANDLE newhandle = (HANDLE)newtexture;
+						texcache->insert(Handle, hash, newhandle);
+#if GCONTEXT_DEBUG
+						debug << " succeeded. newhandle = " << newhandle << "." << endl;
+#endif
 					}
 				}
+#if GCONTEXT_DEBUG
+				else {
+					debug << "  Found existing newhandle." << endl;
+				}
+#endif
 			}
 		}
-        pTexture->UnlockRect(0); //Finished reading pTextures bits
-    } else { //Video textures/improper format
-       // this is the beauty of your solution; you replaced that whole O(n^2) loop bullshit with one line ;)
+		pTexture->UnlockRect(0);												// Finished reading pTextures bits
+	} else {																	// Video textures/improper format
+		// this is the beauty of your solution; you replaced that whole O(n^2) loop bullshit with one line ;)
 		texcache->erase(Handle);
 		debugtype = String("unsupported");
-    }
-    //Debug
-    if(debugmode){
-        String debugfile = String("tonberry\\debug\\") + debugtype + String("\\") + String::ZeroPad(String(m), 3) + String(".bmp");
-        D3DXSaveTextureToFile(debugfile.CString(), D3DXIFF_BMP, pTexture, NULL);
-        m++; //debug
-    }
+#if GCONTEXT_DEBUG
+		debug << "  Unsupported." << endl;
+#endif
+	}
+	// debug
+	if (debugmode) {
+		String debugfile = String("tonberry\\debug\\") + debugtype + String("\\") + String::ZeroPad(String(m), 3) + String(".bmp");
+#if GCONTEXT_DEBUG
+		debug << "  Saving debugmode texture to " << debugfile << "... ";
+		debug.flush();
+#endif
+		HRESULT result = D3DXSaveTextureToFile(debugfile.CString(), D3DXIFF_BMP, pTexture, NULL);
+		m++; // debug
+#if GCONTEXT_DEBUG
+		debug << (SUCCEEDED(result) ? "succeeded." : "failed.") << endl;
+#endif
+	}
+#if GCONTEXT_DEBUG
+	else m++;
+
+	debug.close();
+#endif
 }
 
 //Final settex
@@ -722,8 +899,6 @@ bool GlobalContext::SetTexture(DWORD Stage, HANDLE* SurfaceHandles, UINT Surface
 		IDirect3DTexture9* newtexture;
         if (SurfaceHandles[j] && (newtexture = (IDirect3DTexture9*)texcache->at(SurfaceHandles[j]))) {
 			g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
-            //texcache->fastupdate(SurfaceHandles[j]);
-			//((IDirect3DTexture9*)SurfaceHandles[j])->Release();
 #if DEBUG
 	debug << GetCounter() << endl;
 #endif

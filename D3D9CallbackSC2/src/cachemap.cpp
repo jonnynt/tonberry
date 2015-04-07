@@ -1,18 +1,19 @@
 #include "Main.h"
 #include "cachemap.h"
 
-#define DEBUG 0
+#define CACHE_DEBUG 1
 
-#if DEBUG
-string debug_file = "tonberry\\debug\\texture_cache.log";
+#if CACHE_DEBUG
+string cache_debug_file = "tonberry\\debug\\texture_cache.log";
 #endif
+
 
 TextureCache::TextureCache(unsigned max_size)
 {
 	this->max_size = max_size;
 
-#if DEBUG
-	ofstream debug(debug_file, fstream::out | fstream::trunc);
+#if CACHE_DEBUG
+	ofstream debug(cache_debug_file, fstream::out | fstream::trunc);
 	debug << "CACHE_SIZE: " << max_size << endl << endl << endl;
 	debug.close();
 #endif
@@ -23,6 +24,7 @@ TextureCache::TextureCache(unsigned max_size)
 	reverse_handlecache = new reverse_handlecache_t();
 }
 
+
 TextureCache::~TextureCache()
 {
 	delete nh_list;
@@ -30,6 +32,7 @@ TextureCache::~TextureCache()
 	delete handlecache;
 	delete reverse_handlecache;
 }
+
 
 bool TextureCache::contains(uint64_t hash)
 {
@@ -43,57 +46,33 @@ bool TextureCache::contains(HANDLE replaced)
 }
 
 
-HANDLE TextureCache::at(uint64_t hash)
-{
-	nhcache_map_iter iter = nh_map->find(hash);
-
-	if (iter == nh_map->end()) return NULL;
-
-	return iter->second->second;
-}
-
-
 HANDLE TextureCache::at(HANDLE replaced)
 {
-
 	handlecache_iter cache_iter = handlecache->find(replaced);
-	if (cache_iter == handlecache->end()) return NULL;
+	if (cache_iter == handlecache->end()) return nullptr;
 
 	nhcache_map_iter map_iter = nh_map->find(cache_iter->second);
-	if (map_iter == nh_map->end()) {															// this should never happen
-#if DEBUG
-		ofstream debug(debug_file, ofstream::out | ofstream::app);
+#if CACHE_DEBUG
+	if (map_iter == nh_map->end()) {														// this should never happen
+		ofstream debug(cache_debug_file, ofstream::out | ofstream::app);
+//		debug << "LOCATION 0" << endl;
 		debug << endl << "ERROR: handlecache entry (" << cache_iter->first << ", " << cache_iter->second << ") not in nh_map!" << endl;
 		debug.close();
-#endif
-		return NULL;
+		return nullptr;
 	}
-	fastupdate(map_iter);
+#endif
+
+	// move (most-recently-accessed) list item to front of nh_list
+	nh_list->splice(nh_list->begin(), *nh_list, map_iter->second);							// fastupdate() - full method call is excessive
+
 	return map_iter->second->second;
 }
 
-void TextureCache::fastupdate(nhcache_map_iter replaced){
-	//uint64_t hash = handlecache->find(replaced)->second;
-	////no need to check if it exists... it obviously does
-	//nhcache_map_iter updated = nh_map->find(hash);	// this line is now needed, we want to check if we update or not 
-	//if (updated == nh_map->end()) return;	//not actually needed, but will keep it, just in case ;)
-
-	/* UPDATE NH CACHE ACCESS ORDER */
-	nhcache_list_iter item = replaced->second;
-
-	// move (most-recently-accessed) list item to front of nh_list
-	nh_list->push_front(*item);
-	nh_list->erase(item);
-
-	replaced->second = nh_list->begin();
-
-	//don't need to update handlecache or reverse_handlecache since our precondition is to have all them coherent.
-}
 
 void TextureCache::map_insert(uint64_t hash, HANDLE replaced)
 {
-#if DEBUG
-	ofstream debug(debug_file, ofstream::out | ofstream::app);
+#if CACHE_DEBUG
+	ofstream debug(cache_debug_file, ofstream::out | ofstream::app);
 #endif
 
 	// update nh_map with new list item pointer
@@ -108,7 +87,7 @@ void TextureCache::map_insert(uint64_t hash, HANDLE replaced)
 		uint64_t old_hash = cache_insertion.first->second;
 
 		if (old_hash == hash) {																// if the entry is the same, then nothing needs to change
-#if DEBUG
+#if CACHE_DEBUG
 			debug.close();
 #endif
 			return;
@@ -120,59 +99,68 @@ void TextureCache::map_insert(uint64_t hash, HANDLE replaced)
 			if (backpointer->second == replaced) {
 				int size_before = reverse_handlecache->size();
 				reverse_handlecache->erase(backpointer);
-#if DEBUG
-				debug << "\tRemoving (" << backpointer->first << ", " << backpointer->second << ") from reverse_handlecache-> ";
-				debug << "(size: " << size_before << " --> " << reverse_handlecache->size() << ")" << endl;
+#if CACHE_DEBUG
+//				debug << "LOCATION 1" << endl;
+				debug << "  Removing (" << backpointer->first << ", " << backpointer->second << ") from reverse_handlecache ";
+				debug << "(size: " << size_before << " --> " << reverse_handlecache->size() << ")." << endl;
 #endif
 				break;
 			}
 		cache_insertion.first->second = hash;												// change handlecache entry
-#if DEBUG
-		debug << "\tChanging (" << cache_insertion.first->first << ", (" << old_hash << ")) to ";
-		debug << "(" << replaced << ", (" << nh_list->begin()->first << ")) in handlecache: ";
+#if CACHE_DEBUG
+//		debug << "LOCATION 2" << endl;
+		debug << "  Changing (" << cache_insertion.first->first << ", " << old_hash << ") to ";
+		debug << "(" << replaced << ", " << nh_list->begin()->first << ") in handlecache: ";
 		debug << "nh_map[" << hash << "] = " << nh_map->at(hash)->second << endl;
 	} else {
-		debug << "\tAdding (" << replaced << ", (" << hash << ")) to handlecache: ";		// actually already did so in if() above
+//		debug << "LOCATION 3" << endl;
+		debug << "  Adding (" << replaced << ", " << hash << ") to handlecache: ";		// actually already did so in if() above
 		debug << "nh_map[" << hash << "] = " << nh_map->at(hash)->second << endl;
 	}
+
+	int size_before = reverse_handlecache->size();
 #else
-}
+	}
 #endif
 
 	reverse_handlecache->emplace(nhcache_item_t(hash, replaced));
 
-#if DEBUG
-	debug << "\tAdding (" << nh_list->begin()->first << ", (" << replaced << ") to reverse_handlecache:" << endl;
-	pair<reverse_handlecache_iter, reverse_handlecache_iter> backpointer_range = reverse_handlecache->equal_range(hash);
-	reverse_handlecache_iter backpointer = reverse_handlecache->begin();// backpointer_range.first;
-	for (; /*backpointer != backpointer_range.second &&*/ backpointer != reverse_handlecache->end(); backpointer++)
-		debug << "\t\t\t\t\t\t\t\t(" << backpointer->first << ", " << backpointer->second << ")" << endl;
+#if CACHE_DEBUG
+//	debug << "LOCATION 4" << endl;
+	debug << "  Adding (" << nh_list->begin()->first << ", " << replaced << ") to reverse_handlecache ";
+	debug << "(size: " << size_before << " --> " << reverse_handlecache->size() << ")." << endl;
+//	pair<reverse_handlecache_iter, reverse_handlecache_iter> backpointer_range = reverse_handlecache->equal_range(hash);
+//	reverse_handlecache_iter backpointer = reverse_handlecache->begin();// backpointer_range.first;
+//	for (; /*backpointer != backpointer_range.second &&*/ backpointer != reverse_handlecache->end(); backpointer++)
+//		debug << "    \t\t\t\t\t\t(" << backpointer->first << ", " << backpointer->second << ")" << endl;
 
 	debug << endl;
 	debug.close();
 #endif
 }
 
+
 bool TextureCache::update(HANDLE replaced, uint64_t hash)
 {
-#if DEBUG
-	ofstream debug(debug_file, ofstream::out | ofstream::app);
-	debug << "Inserting (" << replaced << " :-> nh_map[" << hash << "] = " << nh_map->at(hash)->second << "):" << endl;
-#endif
-
 	nhcache_map_iter updated = nh_map->find(hash);	// this line is now needed, we want to check if we update or not 
-	if (updated == nh_map->end()) return false;	
+	if (updated == nh_map->end()) return false;
+
+#if CACHE_DEBUG
+	ofstream debug(cache_debug_file, ofstream::out | ofstream::app);
+//	debug << "LOCATION 5" << endl;
+	debug << "Inserting (" << replaced << " :-> nh_map[" << hash << "] = " << updated->second->second << "):" << endl;
+#endif
 
 	/* UPDATE NH CACHE ACCESS ORDER */
 	nhcache_list_iter item = updated->second;
 
 	// move (most-recently-accessed) list item to front of nh_list
-	nh_list->push_front(*item);
-	nh_list->erase(item);
+	nh_list->splice(nh_list->begin(), *nh_list, item);
 
-#if DEBUG
-	debug << "\tMoving (" << item->first << ", " << item->second << ") to front of nh_list: nh_list->begin() = ";
-	debug << "(" << nh_list->begin()->first << ", " << nh_list->begin()->second << ")" << endl;
+#if CACHE_DEBUG
+//	debug << "LOCATION 6" << endl;
+	debug << "  Moving (" << item->first << ", " << item->second << ") to front of nh_list (size: " << nh_list->size() << "): nh_list->begin() = ";
+	debug << "(" << nh_list->begin()->first << ", " << nh_list->begin()->second << "): " << ((updated->second == nh_list->begin()) ? "true" : "false") << endl;
 	debug.close();
 #endif
 
@@ -185,10 +173,11 @@ void TextureCache::insert(HANDLE replaced, uint64_t hash, HANDLE replacement)
 {
 	nh_list->push_front(nhcache_item_t(hash, replacement));
 
-#if DEBUG
-	ofstream debug(debug_file, ofstream::out | ofstream::app);
+#if CACHE_DEBUG
+	ofstream debug(cache_debug_file, ofstream::out | ofstream::app);
+//	debug << "LOCATION 7" << endl;
 	debug << "Inserting (" << replaced << " :-> (" << hash << ", " << replacement << "):" << endl;
-	debug << "\tInserting (" << hash << ", " << replacement << ") at front of nh_list: nh_list->begin() = ";
+	debug << "  Inserting (" << hash << ", " << replacement << ") at front of nh_list (size: " << nh_list->size() << "): nh_list->begin() = ";
 	debug << "(" << nh_list->begin()->first << ", " << nh_list->begin()->second << ")" << endl;
 #endif
 
@@ -198,13 +187,14 @@ void TextureCache::insert(HANDLE replaced, uint64_t hash, HANDLE replacement)
 		nhcache_list_iter last_elem = nh_list->end();
 		--last_elem;
 
-#if DEBUG
-		debug << "\tRemoving (" << last_elem->first << ", " << last_elem->second << ") from back of nh_list." << endl;
+#if CACHE_DEBUG
+//		debug << "LOCATION 8" << endl;
+		debug << "  Removing (" << last_elem->first << ", " << last_elem->second << ") from back of nh_list (size: " << (nh_list->size() - 1) << ")." << endl;
 #endif
 
 		// dispose of texture
 		((IDirect3DTexture9*)last_elem->second)->Release();
-		last_elem->second = NULL;
+		last_elem->second = nullptr;
 
 		// if we're going to delete a hash from the nh_map, we need to first remove entries that map to that hash from the handlecache
 		nhcache_map_iter to_delete = nh_map->find(last_elem->first);
@@ -213,20 +203,24 @@ void TextureCache::insert(HANDLE replaced, uint64_t hash, HANDLE replacement)
 
 		reverse_handlecache_iter backpointer = backpointer_range.first;
 		for (; backpointer != backpointer_range.second && backpointer != reverse_handlecache->end(); backpointer++) {
-#if DEBUG
-			debug << "\t\tRemoving (" << backpointer->second << ", " << backpointer->first << ") from handlecache." << endl;
+#if CACHE_DEBUG
+//			debug << "LOCATION 9" << endl;
+			debug << "    Removing (" << backpointer->second << ", " << backpointer->first << ") from handlecache." << endl;
 #endif
 			handlecache->erase(backpointer->second);										// remove from handlecache; reverse_handlecache will be removed
 		}																					// afterward to preserve iterators in the backpointer_range
-		int size_before = reverse_handlecache->size();
-		int num_removed = reverse_handlecache->erase(last_elem->first);
 
-#if DEBUG
-		debug << "\t\tRemoved " << num_removed << " entries from reverse_handlecache-> (size: " << size_before << " --> " << reverse_handlecache->size() << ")" << endl;
-		debug << "\tRemoving (" << to_delete->first << ", (" << to_delete->second->first << ", " << to_delete->second->second << ")) from nh_map." << endl;
+#if CACHE_DEBUG
+//		debug << "LOCATION 10" << endl;
+		size_t size_before = reverse_handlecache->size();
+		size_t num_removed = reverse_handlecache->erase(last_elem->first);
+		debug << "    Removed " << num_removed << " entries from reverse_handlecache (size: " << size_before << " --> " << reverse_handlecache->size() << ")." << endl;
+		debug << "  Removing (" << to_delete->first << ", (" << to_delete->second->first << ", " << to_delete->second->second << ")) from nh_map." << endl;
 #endif
 
 		// remove from map (this is why the nh_list stores pair<hash, handle>)
+		// TODO: should we move to_delete->second to back of nh_list since it is no longer referenced in the handlecache?
+		//			that way it would be deleted first when the cache is full
 		nh_map->erase(to_delete);
 
 		// pop from list
@@ -234,22 +228,24 @@ void TextureCache::insert(HANDLE replaced, uint64_t hash, HANDLE replacement)
 	}
 	/* END MAKE SURE NHCACHE IS THE CORRECT SIZE */
 
-#if DEBUG
+#if CACHE_DEBUG
 	debug.close();
 #endif
 
 	map_insert(hash, replaced);
 }
 
+
 void TextureCache::erase(HANDLE replaced)
 {
 	handlecache_iter iter;
 	if ((iter = handlecache->find(replaced)) != handlecache->end()) {
 
-#if DEBUG
-		ofstream debug(debug_file, ofstream::out | ofstream::app);
+#if CACHE_DEBUG
+		ofstream debug(cache_debug_file, ofstream::out | ofstream::app);
+//		debug << "LOCATION 11" << endl;
 		debug << "Erasing unused HANDLE " << replaced << ": " << endl;
-		debug << "\tRemoving (" << iter->first << ", " << iter->second << ") from handlecache." << endl;
+		debug << "  Removing (" << iter->first << ", " << iter->second << ") from handlecache." << endl;
 #endif
 
 		pair<reverse_handlecache_iter, reverse_handlecache_iter> backpointer_range = reverse_handlecache->equal_range(iter->second);
@@ -258,16 +254,18 @@ void TextureCache::erase(HANDLE replaced)
 			if (backpointer->second == replaced) {
 				int size_before = reverse_handlecache->size();
 				reverse_handlecache->erase(backpointer);									// remove matching backpointer from reverse_handlecache
-#if DEBUG
-				debug << "\tRemoving (" << backpointer->first << ", " << backpointer->second << ") from reverse_handlecache-> ";
-				debug << "(size: " << size_before << " --> " << reverse_handlecache->size() << ")" << endl;
+#if CACHE_DEBUG
+//				debug << "LOCATION 12" << endl;
+				debug << "  Removing (" << backpointer->first << ", " << backpointer->second << ") from reverse_handlecache ";
+				debug << "(size: " << size_before << " --> " << reverse_handlecache->size() << ")." << endl;
 #endif
 				break;
 			}
 
 		handlecache->erase(iter);															// remove entry from handlecache
 
-#if DEBUG
+#if CACHE_DEBUG
+//		debug << "LOCATION 13" << endl;
 		debug << endl;
 		debug.close();
 #endif
