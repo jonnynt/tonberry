@@ -8,9 +8,11 @@
 #include <unordered_set>
 
 #define DEBUG 0
-#define GCONTEXT_DEBUG 1
+#define ATTACH_DEBUGGER 0
+#define GCONTEXT_DEBUG 0
+#define CREATE_TEXTURE_DEBUG 0
 
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 string gcontext_debug_file = "tonberry\\debug\\global_context.log";
 #endif
 
@@ -129,11 +131,10 @@ float resize_factor;
 string texdir("");
 
 //TextureCache
-unsigned cache_size = 1000;
+size_t cache_size = 250;
 TextureCache * texcache;
 
 void initCache(){
-	if(cache_size < 100) cache_size = 100;
 	texcache = new TextureCache(cache_size);
 }
 
@@ -145,22 +146,30 @@ void loadprefs ()
 	if (prefsfile.is_open()){
 		string line;
 		while ( getline(prefsfile, line) ){
-			if (line.substr(0, line.find("=")) == "resize_factor")
-				resize_factor = (float)atoi(line.substr(line.find("=") + 1, line.length()).c_str()); //make sure no spaces in prefs file
-			if (line.substr(0, line.find("=")) == "debug_mode")
-				debugmode = (line.substr(line.find("=")+1, line.length()) == string("yes"));
-			if (line.substr(0, line.find("=")) == "cache_size")
-				cache_size = (unsigned)atoi(line.substr(line.find("=") + 1, line.length()).c_str());
-			if (line.substr(0, line.find("=")) == "texture_dir"){
-				texdir = line.substr(line.find("=")+1, line.length());
-				if(texdir.back() != '/') texdir += "/";
+			if (line.empty() || line[0] == '#') continue;
+			size_t eq = line.find("=");
+			if (eq != string::npos) {
+				string param = line.substr(0, eq);
+				if (param == "resize_factor")
+					resize_factor = (float)atoi(line.substr(eq + 1, line.length()).c_str()); //make sure no spaces in prefs file
+				else if (param == "debug_mode")
+					debugmode = (line.substr(eq + 1, line.length()) == string("yes"));
+				else if (param == "cache_size")
+					cache_size = (unsigned)atoi(line.substr(eq + 1, line.length()).c_str());
+				else if (param == "texture_dir") {
+					texdir = line.substr(eq + 1, line.length());
+					if (texdir.back() != '/') texdir += "/";
+				}
 			}
 			//if (line.substr(0) == string("#"));
 		}
 		prefsfile.close();
 	}
 
-#if GCONTEXT_DEBUG
+	cache_size = max(cache_size, 100U);
+	cache_size = min(cache_size, 800U);
+
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
 	debug << endl;
 	debug << "Preferences:" << endl;
@@ -175,7 +184,7 @@ void loadprefs ()
 //Mod Jay
 void loadhashfile ()	//Expects hash1map folder to be in ff8/tonberry directory
 {
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
 	debug << endl;
 	debug << "Hashmap:" << endl;
@@ -194,7 +203,7 @@ void loadhashfile ()	//Expects hash1map folder to be in ff8/tonberry directory
 		for (fs::directory_iterator it(hashpath); it != end_it; it++) {
 			if (fs::is_regular_file(it->status())) {	//if we got a regular file
 				if (it->path().extension() == ".csv") {	//we check its extension, if .csv file:
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 					debug << "  Reading " << it->path().filename().string() << "...";
 					debug.flush();
 					size_t size_before = hashmap.size();
@@ -224,7 +233,7 @@ void loadhashfile ()	//Expects hash1map folder to be in ff8/tonberry directory
 						hashfile.close();
 					}
 
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 					debug << " found " << (hashmap.size() - size_before) << " hashes." << endl;
 #endif
 				}
@@ -232,7 +241,7 @@ void loadhashfile ()	//Expects hash1map folder to be in ff8/tonberry directory
 		}
 	}
 
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	debug << "  hashmap.size() = " << hashmap.size() << endl;
 	debug << "  sysfld_hashes.size() = " << sysfld_hashes.size() << ":" << endl;
 	for (uint64_t sysfld_hash : sysfld_hashes)
@@ -246,7 +255,7 @@ void loadhashfile ()	//Expects hash1map folder to be in ff8/tonberry directory
 
 void loadcollfile ()	//Expects collisions.csv to be in ff8/tonberry directory
 {
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
 	debug << endl;
 	debug << "Collisions:" << endl;
@@ -257,7 +266,7 @@ void loadcollfile ()	//Expects collisions.csv to be in ff8/tonberry directory
 	string line;
 	if (collfile.is_open())
 	{
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 		debug << "  Reading collisions.csv...";
 		debug.flush();
 #endif
@@ -270,12 +279,12 @@ void loadcollfile ()	//Expects collisions.csv to be in ff8/tonberry directory
 			collmap.insert(pair<uint64_t, string>(value, field)); //key, value for unique names, value, key for unique hashvals
 		}
 		collfile.close();
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 		debug << " found " << collmap.size() << " hashes." << endl;
 #endif
 	}
 
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	debug.close();
 #endif
 }
@@ -294,7 +303,7 @@ uint64_t StringToUint64(string s)
 
 void loadcoll2file ()	//Expects hash2map.csv to be in ff8/tonberry directory
 {
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
 	debug << endl;
 	debug << "Hash2:" << endl;
@@ -305,7 +314,7 @@ void loadcoll2file ()	//Expects hash2map.csv to be in ff8/tonberry directory
 	string line;
 	if (coll2file.is_open())
 	{
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 		debug << "  Reading hash2map.csv...";
 		debug.flush();
 #endif
@@ -320,12 +329,12 @@ void loadcoll2file ()	//Expects hash2map.csv to be in ff8/tonberry directory
 			coll2map.insert(pair<string, string>(valuestr, field)); //key, value for unique names, value, key for unique hashvals
 		}
 		coll2file.close();
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 		debug << " found " << hash2map.size() << " hashes." << endl;
 #endif
 	}
 
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	debug.close();
 #endif
 }
@@ -333,7 +342,7 @@ void loadcoll2file ()	//Expects hash2map.csv to be in ff8/tonberry directory
 //Mod Jay
 void loadobjfile ()	//Expects objmap.csv to be in ff8/tonberry directory
 {
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
 	debug << endl;
 	debug << "Objects:" << endl;
@@ -349,7 +358,7 @@ void loadobjfile ()	//Expects objmap.csv to be in ff8/tonberry directory
 		for (fs::directory_iterator it(hashpath); it != end_it; it++) {
 			if (fs::is_regular_file(it->status())) {	//if we got a regular file
 				if (it->path().extension() == ".csv") {	//we check its extension, if .csv file:
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 					debug << "  Reading " << it->path().filename().string() << "...";
 					debug.flush();
 					size_t size_before = objmap.size();
@@ -369,7 +378,7 @@ void loadobjfile ()	//Expects objmap.csv to be in ff8/tonberry directory
 						objfile.close();
 					}
 
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 					debug << " found " << (objmap.size() - size_before) << " hashes." << endl;
 #endif
 				}
@@ -377,7 +386,7 @@ void loadobjfile ()	//Expects objmap.csv to be in ff8/tonberry directory
 		}
 	}
 
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	debug << "  objmap.size() = " << objmap.size() << endl;
 	debug.close();
 #endif
@@ -396,7 +405,11 @@ void GlobalContext::Init ()
 	_RPT0(_CRT_ERROR,"file message\n");
 	CloseHandle(hLogFile);*/
 	//------------
-#if GCONTEXT_DEBUG
+#if ATTACH_DEBUGGER
+	::MessageBox(NULL, "Attach debugger now", "ATTACH", MB_OK);
+#endif
+
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	ofstream debug(gcontext_debug_file, fstream::out | fstream::trunc);
 	debug << "Initialized" << endl;
 	debug.close();
@@ -783,14 +796,14 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 			texcache->erase(Handle);
 			debugtype = String("nomatch");
 		} else {																// Texture FOUND in Hash_Algorithm_1 OR is a COLLISION
-			if (match == Matchtype::COLLISION) { // Run Hash_Algorithm_2
+			if (match == Matchtype::COLLISION) {								// Run Hash_Algorithm_2
 				Hash_Algorithm_2(pData, pitch, Desc.Width, Desc.Height);
 				match = getfield2(hash, texturename);
-				// hash = StringToUint64(hashval2.getNumber());
 				if (match == Matchtype::NOMATCH) {
 					texcache->erase(Handle);
 					debugtype = String("nomatch2");
 				}
+
 #if GCONTEXT_DEBUG
 				debug << "  getfield2 - ";
 				debug.flush();
@@ -804,7 +817,7 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 			}
 
 			if (match == Matchtype::MATCH) {
-				debugtype = String("replaced");
+				debugtype = String("noreplace");
 				if (!texcache->update(Handle, hash)) {							// directly updated if it succeeds we just end unlockrect cycle.
 					string filename = texdir + "textures\\" + texturename.substr(0, 2) + "\\" + texturename.substr(0, texturename.rfind("_")) + "\\" + texturename + ".png";
 
@@ -814,42 +827,98 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 #endif
 
 					ifstream ifile(filename);
-					if (ifile.fail()) {
+					if (!ifile || ifile.fail()) {											// No file, allow normal SetTexture
 						texcache->erase(Handle);
-						debugtype = String("noreplace");						// No file, allow normal SetTexture
 #if GCONTEXT_DEBUG
 						debug << " failed." << endl;
 #endif
-					} else {													// Load texture into cache
+					} else {																// Load texture into cache
 #if GCONTEXT_DEBUG
 						debug << " succeeded." << endl;
-						debug << "  Creating new texture...";
-						debug.flush();
 #endif
-						LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
-						IDirect3DTexture9* newtexture;
+#if CREATE_TEXTURE_DEBUG && !GCONTEXT_DEBUG
+						ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
+						debug << endl << m << " (" << Handle << "):" << endl;
+#endif
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
+						debug << "  Creating new texture...";
+#if CREATE_TEXTURE_DEBUG
+						debug << endl;
+#endif
+#endif
+
 						Bitmap Bmp;
 						Bmp.LoadPNG(String(filename.c_str()));
-						DWORD Usage = D3DUSAGE_AUTOGENMIPMAP;
-						D3DPOOL Pool = D3DPOOL_MANAGED;
-						D3DFORMAT Format = D3DFMT_A8R8G8B8;
-						Device->CreateTexture(int(resize_factor*(float)Desc.Width), int(resize_factor*(float)Desc.Height), 0, Usage, Format, Pool, &newtexture, NULL);
-						D3DLOCKED_RECT newRect;
-						newtexture->LockRect(0, &newRect, NULL, 0);
-						BYTE* newData = (BYTE *)newRect.pBits;
-						for (UINT y = 0; y < Bmp.Height(); y++) {
-							RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
-							for (UINT x = 0; x < Bmp.Width(); x++) {			// works for textures of any size (e.g. 4-bit indexed)
-								RGBColor Color = Bmp[Bmp.Height() - y - 1][x];  // must flip image
-								CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
-							}
-						}
-						newtexture->UnlockRect(0);								// Texture loaded
-						HANDLE newhandle = (HANDLE)newtexture;
-						texcache->insert(Handle, hash, newhandle);
-#if GCONTEXT_DEBUG
-						debug << " succeeded. newhandle = " << newhandle << "." << endl;
+
+						size_t new_width = resize_factor * (float)Desc.Width;
+						size_t new_height = resize_factor * (float)Desc.Height;
+						if (new_width >= Bmp.Width() && new_height >= Bmp.Height()) {		// replaced HANDLE is large enough for the replacement
+#if CREATE_TEXTURE_DEBUG
+							debug << "    texture appropriate for replacement; " << Desc.Width << "x" << Desc.Height << " vs " << Bmp.Width() << "x" << Bmp.Height() << endl;
 #endif
+							LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
+							IDirect3DTexture9* newtexture;
+							HRESULT result = Device->CreateTexture(new_width, new_height, 0, D3DUSAGE_AUTOGENMIPMAP, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newtexture, NULL);
+
+							if (SUCCEEDED(result)) {										// newtexture successfully created
+#if CREATE_TEXTURE_DEBUG
+								debug << "    newtexture created; HRESULT = " << result << endl;
+#endif
+
+								D3DLOCKED_RECT newRect;
+								result = newtexture->LockRect(0, &newRect, NULL, 0);
+
+								if (SUCCEEDED(result)) {									// newtexture successfully locked
+#if CREATE_TEXTURE_DEBUG
+									debug << "    newtexture locked; HRESULT = " << result << endl;
+#endif
+
+									BYTE* newData = (BYTE *)newRect.pBits;
+
+									for (UINT y = 0; y < Bmp.Height(); y++) {
+										RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
+										for (UINT x = 0; x < Bmp.Width(); x++) {			// works for textures of any size (e.g. 4-bit indexed)
+											RGBColor Color = Bmp[Bmp.Height() - y - 1][x];  // must flip image
+											CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+										}
+									}
+									result = newtexture->UnlockRect(0);						// Texture loaded
+
+									if (SUCCEEDED(result)) {
+#if CREATE_TEXTURE_DEBUG
+										debug << "    newtexture loaded and unlocked; HRESULT = " << result << endl;
+#endif
+
+										HANDLE newhandle = (HANDLE)newtexture;
+										texcache->insert(Handle, hash, newhandle);
+										debugtype = String("replaced");
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
+										debug << "  succeeded. newhandle = " << newhandle << "." << endl;
+#endif
+									} else {
+										texcache->erase(Handle);
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
+										debug << "    ERROR: could not unlock newtexture; HRESULT = " << result << endl;
+#endif
+									}
+								} else {
+									texcache->erase(Handle);
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
+									debug << "    ERROR: could not lock newtexture; HRESULT = " << result << endl;
+#endif
+								}
+							} else {
+								texcache->erase(Handle);
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
+								debug << "    ERROR: could not create newtexture; HRESULT = " << result << endl;
+#endif
+							}
+						} else {
+							texcache->erase(Handle);
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
+							debug << "    ERROR: texture too small for replacement; " << Desc.Width << "x" << Desc.Height << " vs " << Bmp.Width() << "x" << Bmp.Height() << endl;
+#endif
+						}
 					}
 				}
 #if GCONTEXT_DEBUG
@@ -881,9 +950,10 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 		debug << (SUCCEEDED(result) ? "succeeded." : "failed.") << endl;
 #endif
 	}
-#if GCONTEXT_DEBUG
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	else m++;
-
+#endif
+#if GCONTEXT_DEBUG
 	debug.close();
 #endif
 }
@@ -898,7 +968,7 @@ bool GlobalContext::SetTexture(DWORD Stage, HANDLE* SurfaceHandles, UINT Surface
 	for (int j = 0; j < SurfaceHandleCount; j++) {
 		IDirect3DTexture9* newtexture;
         if (SurfaceHandles[j] && (newtexture = (IDirect3DTexture9*)texcache->at(SurfaceHandles[j]))) {
-			g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
+			HRESULT result = g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
 #if DEBUG
 	debug << GetCounter() << endl;
 #endif

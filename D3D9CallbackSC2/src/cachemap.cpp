@@ -1,7 +1,7 @@
 #include "Main.h"
 #include "cachemap.h"
 
-#define CACHE_DEBUG 1
+#define CACHE_DEBUG 0
 
 #if CACHE_DEBUG
 string cache_debug_file = "tonberry\\debug\\texture_cache.log";
@@ -219,8 +219,6 @@ void TextureCache::insert(HANDLE replaced, uint64_t hash, HANDLE replacement)
 #endif
 
 		// remove from map (this is why the nh_list stores pair<hash, handle>)
-		// TODO: should we move to_delete->second to back of nh_list since it is no longer referenced in the handlecache?
-		//			that way it would be deleted first when the cache is full
 		nh_map->erase(to_delete);
 
 		// pop from list
@@ -261,6 +259,9 @@ void TextureCache::erase(HANDLE replaced)
 #endif
 				break;
 			}
+
+		nhcache_list_iter list_iter = nh_map->find(iter->second)->second;					// move list item to back of nh_list so that
+		nh_list->splice(nh_list->end(), *nh_list, list_iter);								// it will be deleted first when the cache is full
 
 		handlecache->erase(iter);															// remove entry from handlecache
 
