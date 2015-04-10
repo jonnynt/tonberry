@@ -4,11 +4,13 @@
 #include "Main.h"
 #include <stdint.h>
 #include <unordered_map>
+#include <unordered_set>
 
 using namespace std;
 
 class TextureCache{
 private:
+
 	typedef pair<uint64_t, HANDLE>						nhcache_item_t;			// associates hashes with newhandles
 	typedef list<nhcache_item_t>						nhcache_list_t;			// holds hashes and their associated newhandle in least-recently-accessed order
 	typedef nhcache_list_t::iterator					nhcache_list_iter;
@@ -21,9 +23,21 @@ private:
 	typedef reverse_handlecache_t::iterator				reverse_handlecache_iter;
 
 
+	struct nhcache_list_iter_hasher
+	{
+		size_t operator()(const nhcache_list_iter& iter) const
+		{
+			return hash<uint64_t>()(iter->first);
+		}
+	};
+
+	typedef unordered_set<nhcache_list_iter, nhcache_list_iter_hasher> nhcache_persistent_t;
+
 	// together these make nhcache:
 	nhcache_list_t			*nh_list;
 	nhcache_map_t			*nh_map;
+	nhcache_persistent_t	*nh_persistent;										// holds nhcache_list_iters that should never be removed from the nhcache
+	nhcache_list_iter		nh_persist_end;										// points to the first non-persistent entry in the nh_list
 
 	// handlecache:
 	handlecache_t			*handlecache;
@@ -33,7 +47,8 @@ private:
 	size_t				entries;
 
 	void map_insert(uint64_t hash,				// nh_map key		- the hash
-					HANDLE replaced				// handlecache key	- will point to the new entry in nh_map
+					HANDLE replaced,			// handlecache key	- will point to the new entry in nh_map
+					nhcache_list_iter item		// nh_list item		- points to the (hash,HANDLE) entry in nh_list
 	);
 
 public:
@@ -62,7 +77,7 @@ public:
 	  returns: true if nh_map[hash] exist, false if it doesn't
 	*/
 	bool update(HANDLE replaced,	// the handlecache key
-				uint64_t hash			// the nhcache key
+				uint64_t hash		// the nhcache key
 		);
 
 	/*insert: inserts replaced :-> hash into the cache and hash :-> replacement into the nhcache
@@ -72,7 +87,8 @@ public:
 	*/
 	void insert(HANDLE replaced,	// in-game texture to be replaced by replacement
 				uint64_t hash,		// texture hash
-				HANDLE replacement	// modded texture handle
+				HANDLE replacement,	// modded texture handle
+				bool persist=false	// whether the replacement should persist in the cache
 		);
 
 	/*erase: removes HANDLE from the cache

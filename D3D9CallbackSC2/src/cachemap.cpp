@@ -22,6 +22,9 @@ TextureCache::TextureCache(unsigned max_size)
 	nh_map = new nhcache_map_t();
 	handlecache = new handlecache_t();
 	reverse_handlecache = new reverse_handlecache_t();
+
+	nh_persistent = new nhcache_persistent_t();
+	nh_persist_end = nh_list->begin();
 }
 
 
@@ -31,6 +34,7 @@ TextureCache::~TextureCache()
 	delete nh_map;
 	delete handlecache;
 	delete reverse_handlecache;
+	delete nh_persistent;
 }
 
 
@@ -62,14 +66,18 @@ HANDLE TextureCache::at(HANDLE replaced)
 	}
 #endif
 
-	// move (most-recently-accessed) list item to front of nh_list
-	nh_list->splice(nh_list->begin(), *nh_list, map_iter->second);							// fastupdate() - full method call is excessive
+	// move (most-recently-accessed) list item to front of non-persistent portion of nh_list
+	nhcache_list_iter item = map_iter->second;
+	if (!nh_persistent->count(item) && nh_persist_end != item) {							// if item is not persistent and item is not already at nh_persist_end
+		nh_list->splice(nh_persist_end, *nh_list, item);									// fastupdate() - full method call is excessive
+		nh_persist_end--;
+	}
 
 	return map_iter->second->second;
 }
 
 
-void TextureCache::map_insert(uint64_t hash, HANDLE replaced)
+void TextureCache::map_insert(uint64_t hash, HANDLE replaced, nhcache_list_iter item)
 {
 #if CACHE_DEBUG
 	ofstream debug(cache_debug_file, ofstream::out | ofstream::app);
@@ -77,9 +85,9 @@ void TextureCache::map_insert(uint64_t hash, HANDLE replaced)
 
 	// update nh_map with new list item pointer
 	pair<nhcache_map_iter, bool> map_insertion = nh_map->insert(							// returns iterator to nh_map[hash] and boolean success
-		pair<uint64_t, nhcache_list_iter>(hash, nh_list->begin()));
+		pair<uint64_t, nhcache_list_iter>(hash, item));
 	if (!map_insertion.second)																// if nh_map already contained hash, 
-		map_insertion.first->second = nh_list->begin();										// change nh_map[hash] to nh_list->begin()
+		map_insertion.first->second = item;													// change nh_map[hash] to item
 
 	pair<handlecache_iter, bool> cache_insertion = handlecache->insert(						// returns iterator to handlecache[HANDLE] and boolean success
 		pair<HANDLE, uint64_t>(replaced, hash));
@@ -88,6 +96,7 @@ void TextureCache::map_insert(uint64_t hash, HANDLE replaced)
 
 		if (old_hash == hash) {																// if the entry is the same, then nothing needs to change
 #if CACHE_DEBUG
+			debug << endl;
 			debug.close();
 #endif
 			return;
@@ -110,7 +119,7 @@ void TextureCache::map_insert(uint64_t hash, HANDLE replaced)
 #if CACHE_DEBUG
 //		debug << "LOCATION 2" << endl;
 		debug << "  Changing (" << cache_insertion.first->first << ", " << old_hash << ") to ";
-		debug << "(" << replaced << ", " << nh_list->begin()->first << ") in handlecache: ";
+		debug << "(" << replaced << ", " << item->first << ") in handlecache: ";
 		debug << "nh_map[" << hash << "] = " << nh_map->at(hash)->second << endl;
 	} else {
 //		debug << "LOCATION 3" << endl;
@@ -127,7 +136,7 @@ void TextureCache::map_insert(uint64_t hash, HANDLE replaced)
 
 #if CACHE_DEBUG
 //	debug << "LOCATION 4" << endl;
-	debug << "  Adding (" << nh_list->begin()->first << ", " << replaced << ") to reverse_handlecache ";
+	debug << "  Adding (" << item->first << ", " << replaced << ") to reverse_handlecache ";
 	debug << "(size: " << size_before << " --> " << reverse_handlecache->size() << ")." << endl;
 //	pair<reverse_handlecache_iter, reverse_handlecache_iter> backpointer_range = reverse_handlecache->equal_range(hash);
 //	reverse_handlecache_iter backpointer = reverse_handlecache->begin();// backpointer_range.first;
@@ -154,32 +163,59 @@ bool TextureCache::update(HANDLE replaced, uint64_t hash)
 	/* UPDATE NH CACHE ACCESS ORDER */
 	nhcache_list_iter item = updated->second;
 
-	// move (most-recently-accessed) list item to front of nh_list
-	nh_list->splice(nh_list->begin(), *nh_list, item);
+	// move (most-recently-accessed) list item to front of non-persistent portion of nh_list
+	if (!nh_persistent->count(item) && nh_persist_end != item) {							// if item is not persistent and item is not already at nh_persist_end
+		nh_list->splice(nh_persist_end, *nh_list, item);
+		nh_persist_end--;
 
 #if CACHE_DEBUG
-//	debug << "LOCATION 6" << endl;
-	debug << "  Moving (" << item->first << ", " << item->second << ") to front of nh_list (size: " << nh_list->size() << "): nh_list->begin() = ";
-	debug << "(" << nh_list->begin()->first << ", " << nh_list->begin()->second << "): " << ((updated->second == nh_list->begin()) ? "true" : "false") << endl;
+		//	debug << "LOCATION 6" << endl;
+		debug << "  Moving (" << item->first << ", " << item->second << ") to nh_persist_end (size: " << nh_list->size() << "): nh_persist_end = ";
+		debug << "(" << nh_persist_end->first << ", " << nh_persist_end->second << "): " << ((updated->second == nh_persist_end) ? "true" : "false") << endl;
+
+		debug << "    Distance between nh_persist_end and nh_list->end(): " << distance(nh_persist_end, nh_list->end()) << endl;
+#endif
+	}
+#if CACHE_DEBUG
 	debug.close();
 #endif
 
-	map_insert(hash, replaced);
+	map_insert(hash, replaced, item);
 	return true;
 }
 
 
-void TextureCache::insert(HANDLE replaced, uint64_t hash, HANDLE replacement)
+void TextureCache::insert(HANDLE replaced, uint64_t hash, HANDLE replacement, bool persist)
 {
-	nh_list->push_front(nhcache_item_t(hash, replacement));
-
 #if CACHE_DEBUG
 	ofstream debug(cache_debug_file, ofstream::out | ofstream::app);
-//	debug << "LOCATION 7" << endl;
-	debug << "Inserting (" << replaced << " :-> (" << hash << ", " << replacement << "):" << endl;
-	debug << "  Inserting (" << hash << ", " << replacement << ") at front of nh_list (size: " << nh_list->size() << "): nh_list->begin() = ";
-	debug << "(" << nh_list->begin()->first << ", " << nh_list->begin()->second << ")" << endl;
 #endif
+
+	nhcache_list_iter item;
+	if (persist) {
+		nh_list->push_front(nhcache_item_t(hash, replacement));
+		item = nh_list->begin();
+		nh_persistent->insert(item);
+
+#if CACHE_DEBUG
+		//	debug << "LOCATION 7" << endl;
+		debug << "Inserting (" << replaced << " :-> (" << hash << ", " << replacement << ")):" << endl;
+		debug << "  Inserting (" << hash << ", " << replacement << ") at front of nh_list (size: " << nh_list->size() << "): nh_list->begin() = ";
+		debug << "(" << nh_list->begin()->first << ", " << nh_list->begin()->second << ")" << endl;
+#endif
+	} else {
+		nh_persist_end = nh_list->insert(nh_persist_end, nhcache_item_t(hash, replacement));
+		item = nh_persist_end;
+
+#if CACHE_DEBUG
+		//	debug << "LOCATION 7" << endl;
+		debug << "Inserting (" << replaced << " :-> (" << hash << ", " << replacement << "):" << endl;
+		debug << "  Inserting (" << hash << ", " << replacement << ") at nh_persist_end (size: " << nh_list->size() << "): nh_persist_end = ";
+		debug << "(" << nh_persist_end->first << ", " << nh_persist_end->second << ")" << endl;
+
+		debug << "    Distance between nh_persist_end and nh_list->end(): " << distance(nh_persist_end, nh_list->end()) << endl;
+#endif
+	}
 
 	/* MAKE SURE NHCACHE IS THE CORRECT SIZE */
 	while (nh_list->size() > max_size) {													// "while" for completeness but this should only ever loop once
@@ -230,7 +266,7 @@ void TextureCache::insert(HANDLE replaced, uint64_t hash, HANDLE replacement)
 	debug.close();
 #endif
 
-	map_insert(hash, replaced);
+	map_insert(hash, replaced, item);
 }
 
 
@@ -260,8 +296,20 @@ void TextureCache::erase(HANDLE replaced)
 				break;
 			}
 
-		nhcache_list_iter list_iter = nh_map->find(iter->second)->second;					// move list item to back of nh_list so that
-		nh_list->splice(nh_list->end(), *nh_list, list_iter);								// it will be deleted first when the cache is full
+		nhcache_list_iter list_iter = nh_map->find(iter->second)->second;					// move list item to back of nh_list
+		if (!reverse_handlecache->count(iter->second) && !nh_persistent->count(list_iter)) {// (if it has no more entries in handlecache and is not persistent)
+			if (list_iter == nh_persist_end)
+				nh_persist_end++;
+			nh_list->splice(nh_list->end(), *nh_list, list_iter);							// so that it will be deleted first when the cache is full
+#if CACHE_DEBUG
+			debug << "  Moving (" << list_iter->first << ", " << list_iter->second << ") to back of nh_list. (nh_list->end()-1) = ";
+			nhcache_list_iter last = nh_list->end();
+			last--;
+			debug << "(" << last->first << ", " << last->second << ")" << endl;
+
+			debug << "    Distance between nh_persist_end and nh_list->end(): " << distance(nh_persist_end, nh_list->end()) << endl;
+#endif
+		}
 
 		handlecache->erase(iter);															// remove entry from handlecache
 

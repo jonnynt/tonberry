@@ -8,7 +8,7 @@
 #include <unordered_set>
 
 #define DEBUG 0
-#define ATTACH_DEBUGGER 0
+#define ATTACH_DEBUGGER 1
 #define GCONTEXT_DEBUG 0
 #define CREATE_TEXTURE_DEBUG 0
 
@@ -120,8 +120,9 @@ unordered_map<string, string> coll2map;
 unordered_map<uint64_t, string> objmap;
 unordered_map<uint64_t, string>::iterator it;
 unordered_map<string, string>::iterator it2;
-unordered_set<uint64_t> sysfld_hashes;	// holds sysfld hashes
-unordered_set<uint64_t> iconfl_hashes;	// holds iconfl hashes
+unordered_set<uint64_t> persistent_hashes;	// holds hashes that should persist in the cache
+unordered_set<uint64_t> sysfld_hashes;		// holds sysfld hashes
+unordered_set<uint64_t> iconfl_hashes;		// holds iconfl hashes
 uint64_t hashval; //current hashval of left half of memory
 uint64_t objtop; //object in top left corner of memory
 uint64_t objbot; //object in bottom left corner of memory
@@ -166,7 +167,7 @@ void loadprefs ()
 		prefsfile.close();
 	}
 
-	cache_size = max(cache_size, 100U);
+	//cache_size = max(cache_size, 100U);
 	cache_size = min(cache_size, 800U);
 
 #if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
@@ -215,11 +216,22 @@ void loadhashfile ()	//Expects hash1map folder to be in ff8/tonberry directory
 					if (hashfile.is_open()) {
 						while (getline(hashfile, line)) //Omzy's original code
 						{
+							if (line.empty()) continue;
+							if (line[0] == '*') continue;						// textures starting with * should be ignored
+
+							bool persist = false;
+							if (line[0] == '!') {								// textures starting with ! should be persistent
+								persist = true;
+								line = line.substr(1);
+							}
+
 							int comma = line.find(",");
 							string field = line.substr(0, comma);
 							string valuestr = line.substr(comma + 1, line.length()).c_str();
 							uint64_t value = ToNumber<uint64_t>(valuestr);
 							hashmap.insert(pair<uint64_t, string>(value, field)); //key, value for unique names, value, key for unique hashvals
+
+							if (persist) persistent_hashes.insert(value);
 
 							if (field.length() >= 6) {
 								string chars = field.substr(0, 6);
@@ -320,13 +332,25 @@ void loadcoll2file ()	//Expects hash2map.csv to be in ff8/tonberry directory
 #endif
 		while ( getline(coll2file, line) ) //~10000 total number of 128x256 texture blocks in ff8
 		{
+			if (line.empty()) continue;
+			if (line[0] == '*') continue;						// textures starting with * should be ignored
+
+			bool persist = false;
+			if (line[0] == '!') {								// textures starting with ! should be persistent
+				persist = true;
+				line = line.substr(1);
+			}
+
 			int comma = line.find(",");
 			string field = line.substr(0, comma);
 			string valuestr = line.substr(comma + 1, line.length()).c_str();
 			//BigInteger value = BigInteger(valuestr);
 			//value = ToNumber<BigInt>(valuestr);
-			hash2map.insert(pair<BigInteger, uint64_t>(valuestr, StringToUint64(valuestr)));
+			uint64_t value = StringToUint64(valuestr);
+			hash2map.insert(pair<BigInteger, uint64_t>(valuestr, value));
 			coll2map.insert(pair<string, string>(valuestr, field)); //key, value for unique names, value, key for unique hashvals
+
+			if (persist) persistent_hashes.insert(value);
 		}
 		coll2file.close();
 #if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
@@ -369,11 +393,22 @@ void loadobjfile ()	//Expects objmap.csv to be in ff8/tonberry directory
 					string line;
 					if (objfile.is_open()) {
 						while (getline(objfile, line)) {
+							if (line.empty()) continue;
+							if (line[0] == '*') continue;						// textures starting with * should be ignored
+
+							bool persist = false;
+							if (line[0] == '!') {								// textures starting with ! should be persistent
+								persist = true;
+								line = line.substr(1);
+							}
+
 							int comma = line.find(",");
 							string obj = line.substr(0, comma);
 							string valuestr = line.substr(comma + 1, line.length()).c_str();
 							uint64_t value = ToNumber<uint64_t>(valuestr);
 							objmap.insert(pair<uint64_t, string>(value, obj)); //key, value for unique names, value, key for unique hashvals
+
+							if (persist) persistent_hashes.insert(value);
 						}
 						objfile.close();
 					}
@@ -750,8 +785,10 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
         uint64_t hash;
 		string texturename;
 		Matchtype match;
+		bool persist = false;
         Hash_Algorithm_1(pData, pitch, Desc.Width, Desc.Height);				// Run Hash_Algorithm_1
         match = getfield(hash, texturename);
+		persist = persistent_hashes.count(hash);
 
 #if GCONTEXT_DEBUG
 		debug << "  getfield - ";
@@ -764,7 +801,7 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 		debug << " " << hash << endl;
 #endif
 
-        if (sysfld_hashes.count(hash) > 0) {									// Exception for sysfld00 and sysfld01
+        if (sysfld_hashes.count(hash)) {										// Exception for sysfld00 and sysfld01
 			if ((match = getsysfld(pData, pitch, Desc.Width, Desc.Height, texturename)) == Matchtype::MATCH) 
 				hash = parsesysfld(texturename);
 #if GCONTEXT_DEBUG
@@ -777,7 +814,7 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 			}
 			debug << " " << hash << endl;
 #endif
-		} else if (iconfl_hashes.count(hash) > 0) {								// Exception for iconfl00, iconfl01, iconfl02, iconfl03, iconflmaster
+		} else if (iconfl_hashes.count(hash)) {									// Exception for iconfl00, iconfl01, iconfl02, iconfl03, iconflmaster
 			if ((match = geticonfl(pData, pitch, Desc.Width, Desc.Height, texturename)) == Matchtype::MATCH)
 				hash = parseiconfl(texturename);
 #if GCONTEXT_DEBUG
@@ -799,6 +836,7 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 			if (match == Matchtype::COLLISION) {								// Run Hash_Algorithm_2
 				Hash_Algorithm_2(pData, pitch, Desc.Width, Desc.Height);
 				match = getfield2(hash, texturename);
+				persist = persistent_hashes.count(hash);
 				if (match == Matchtype::NOMATCH) {
 					texcache->erase(Handle);
 					debugtype = String("nomatch2");
@@ -890,7 +928,7 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 #endif
 
 										HANDLE newhandle = (HANDLE)newtexture;
-										texcache->insert(Handle, hash, newhandle);
+										texcache->insert(Handle, hash, newhandle, persist);
 										debugtype = String("replaced");
 #if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 										debug << "  succeeded. newhandle = " << newhandle << "." << endl;
