@@ -11,7 +11,13 @@ using namespace std;
 class TextureCache{
 private:
 
-	typedef pair<uint64_t, HANDLE>						nhcache_item_t;			// associates hashes with newhandles
+	typedef struct nhcache_item
+	{
+		uint64_t	hash;
+		HANDLE		replacement;
+		bool		persist;
+	} nhcache_item_t;															// associates hashes with newhandles
+
 	typedef list<nhcache_item_t>						nhcache_list_t;			// holds hashes and their associated newhandle in least-recently-accessed order
 	typedef nhcache_list_t::iterator					nhcache_list_iter;
 	typedef unordered_map<uint64_t, nhcache_list_iter>	nhcache_map_t;			// maps hashes to an entry in the newhandle list
@@ -22,21 +28,9 @@ private:
 	typedef unordered_multimap<uint64_t, HANDLE>		reverse_handlecache_t;	// reverse indexing of handlecache; needed for when values in handlecache are removed from the nhcache
 	typedef reverse_handlecache_t::iterator				reverse_handlecache_iter;
 
-
-	struct nhcache_list_iter_hasher
-	{
-		size_t operator()(const nhcache_list_iter& iter) const
-		{
-			return hash<uint64_t>()(iter->first);
-		}
-	};
-
-	typedef unordered_set<nhcache_list_iter, nhcache_list_iter_hasher> nhcache_persistent_t;
-
 	// together these make nhcache:
 	nhcache_list_t			*nh_list;
 	nhcache_map_t			*nh_map;
-	nhcache_persistent_t	*nh_persistent;										// holds nhcache_list_iters that should never be removed from the nhcache
 	nhcache_list_iter		nh_persist_end;										// points to the first non-persistent entry in the nh_list
 
 	// handlecache:

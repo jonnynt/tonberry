@@ -8,7 +8,7 @@
 #include <unordered_set>
 
 #define DEBUG 0
-#define ATTACH_DEBUGGER 1
+#define ATTACH_DEBUGGER 0
 #define GCONTEXT_DEBUG 0
 #define CREATE_TEXTURE_DEBUG 0
 
@@ -168,7 +168,7 @@ void loadprefs ()
 	}
 
 	//cache_size = max(cache_size, 100U);
-	cache_size = min(cache_size, 800U);
+	//cache_size = min(cache_size, 800U);
 
 #if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
 	ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
@@ -441,6 +441,7 @@ void GlobalContext::Init ()
 	CloseHandle(hLogFile);*/
 	//------------
 #if ATTACH_DEBUGGER
+	//DebugBreak();
 	::MessageBox(NULL, "Attach debugger now", "ATTACH", MB_OK);
 #endif
 
