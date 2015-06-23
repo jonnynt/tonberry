@@ -35,6 +35,11 @@ TextureCache::~TextureCache()
 	delete reverse_handlecache;
 }
 
+bool TextureCache::full()
+{
+	return (nh_list->size() >= max_size && nh_persist_end == nh_list->end());
+}
+
 
 bool TextureCache::contains(uint64_t hash)
 {
@@ -191,49 +196,29 @@ void TextureCache::insert(HANDLE replaced, uint64_t hash, HANDLE replacement, bo
 
 	nhcache_list_iter item;
 	if (persist) {
-		if (nh_list->size() < max_size || nh_persist_end != nh_list->end()) {				// when the cache is full of persistent entries, stop inserting more
-			nh_list->push_front({ hash, replacement, persist });
-			item = nh_list->begin();
+		nh_list->push_front({ hash, replacement, persist });
+		item = nh_list->begin();
 
 #if CACHE_DEBUG
-			debug << "Inserting (" << replaced << " :-> (" << hash << ", " << replacement << ")):" << endl;
-			debug << "  Inserting (" << hash << ", " << replacement << ") at front of nh_list (size: " << nh_list->size() << "): nh_list->begin() = ";
-			debug << "(" << nh_list->begin()->hash << ", " << nh_list->begin()->replacement << ")" << endl;
+		debug << "Inserting (" << replaced << " :-> (" << hash << ", " << replacement << ")):" << endl;
+		debug << "  Inserting (" << hash << ", " << replacement << ") at front of nh_list (size: " << nh_list->size() << "): nh_list->begin() = ";
+		debug << "(" << nh_list->begin()->hash << ", " << nh_list->begin()->replacement << ")" << endl;
 #endif
-		} else {
-#if CACHE_DEBUG
-			debug << "Not inserting persistent (" << replaced << " :-> (" << hash << ", " << replacement << ")): nh_list->size() = " << nh_list->size() << endl;
-			debug << "  Distance between nh_persist_end and nh_list->end(): " << distance(nh_persist_end, nh_list->end()) << endl << endl;
-			debug.close();
-#endif
-			erase(replaced);
-			return;
-		}
-	} else {																				// when the cache is full, stop inserting new entries
-		if (nh_list->size() < max_size) {
-			nh_persist_end = item = nh_list->insert(nh_persist_end, { hash, replacement, persist });
+	} else {
+		nh_persist_end = item = nh_list->insert(nh_persist_end, { hash, replacement, persist });
 
 #if CACHE_DEBUG
-			//	debug << "LOCATION 7" << endl;
-			debug << "Inserting (" << replaced << " :-> (" << hash << ", " << replacement << "):" << endl;
-			debug << "  Inserting (" << hash << ", " << replacement << ") at nh_persist_end (size: " << nh_list->size() << "): nh_persist_end = ";
-			debug << "(" << nh_persist_end->hash << ", " << nh_persist_end->replacement << ")" << endl;
+		//	debug << "LOCATION 7" << endl;
+		debug << "Inserting (" << replaced << " :-> (" << hash << ", " << replacement << "):" << endl;
+		debug << "  Inserting (" << hash << ", " << replacement << ") at nh_persist_end (size: " << nh_list->size() << "): nh_persist_end = ";
+		debug << "(" << nh_persist_end->hash << ", " << nh_persist_end->replacement << ")" << endl;
 
-			debug << "    Distance between nh_persist_end and nh_list->end(): " << distance(nh_persist_end, nh_list->end()) << endl;
+		debug << "    Distance between nh_persist_end and nh_list->end(): " << distance(nh_persist_end, nh_list->end()) << endl;
 #endif
-		} else {
-#if CACHE_DEBUG
-			debug << "Not inserting non-persistent (" << replaced << " :-> (" << hash << ", " << replacement << ")): nh_list->size() = " << nh_list->size() << endl;
-			debug << "  Distance between nh_persist_end and nh_list->end(): " << distance(nh_persist_end, nh_list->end()) << endl << endl;
-			debug.close();
-#endif
-			erase(replaced);
-			return;
-		}
 	}
 
 	/* MAKE SURE NHCACHE IS THE CORRECT SIZE */
-	if (nh_list->size() > max_size) {															// should never be greater than (max_size + 1)
+	while (nh_list->size() > max_size) {													// "while" for completeness; should never be greater than (max_size + 1)
 		// get pointer to last (least recent) list item
 		nhcache_list_iter last_elem = nh_list->end();
 		--last_elem;
@@ -289,50 +274,49 @@ void TextureCache::insert(HANDLE replaced, uint64_t hash, HANDLE replacement, bo
 void TextureCache::erase(HANDLE replaced)
 {
 	handlecache_iter iter;
-	if ((iter = handlecache->find(replaced)) != handlecache->end()) {
+	if ((iter = handlecache->find(replaced)) == handlecache->end()) return;
 
 #if CACHE_DEBUG
-		ofstream debug(cache_debug_file, ofstream::out | ofstream::app);
+	ofstream debug(cache_debug_file, ofstream::out | ofstream::app);
 //		debug << "LOCATION 11" << endl;
-		debug << "Erasing unused HANDLE " << replaced << ": " << endl;
-		debug << "  Removing (" << iter->first << ", " << iter->second << ") from handlecache." << endl;
+	debug << "Erasing unused HANDLE " << replaced << ": " << endl;
+	debug << "  Removing (" << iter->first << ", " << iter->second << ") from handlecache." << endl;
 #endif
 
-		pair<reverse_handlecache_iter, reverse_handlecache_iter> backpointer_range = reverse_handlecache->equal_range(iter->second);
-		reverse_handlecache_iter backpointer = backpointer_range.first;
-		for (; backpointer != backpointer_range.second && backpointer != reverse_handlecache->end(); backpointer++)
-			if (backpointer->second == replaced) {
-				int size_before = reverse_handlecache->size();
-				reverse_handlecache->erase(backpointer);									// remove matching backpointer from reverse_handlecache
+	pair<reverse_handlecache_iter, reverse_handlecache_iter> backpointer_range = reverse_handlecache->equal_range(iter->second);
+	reverse_handlecache_iter backpointer = backpointer_range.first;
+	for (; backpointer != backpointer_range.second && backpointer != reverse_handlecache->end(); backpointer++)
+		if (backpointer->second == replaced) {
+			int size_before = reverse_handlecache->size();
+			reverse_handlecache->erase(backpointer);									// remove matching backpointer from reverse_handlecache
 #if CACHE_DEBUG
 //				debug << "LOCATION 12" << endl;
-				debug << "  Removing (" << backpointer->first << ", " << backpointer->second << ") from reverse_handlecache ";
-				debug << "(size: " << size_before << " --> " << reverse_handlecache->size() << ")." << endl;
+			debug << "  Removing (" << backpointer->first << ", " << backpointer->second << ") from reverse_handlecache ";
+			debug << "(size: " << size_before << " --> " << reverse_handlecache->size() << ")." << endl;
 #endif
-				break;
-			}
-
-		nhcache_list_iter list_iter = nh_map->find(iter->second)->second;					// move list item to back of nh_list
-		if (!list_iter->persist && !reverse_handlecache->count(iter->second)) {				// (if it is not persistent and has no more entries in handlecache)
-			if (list_iter == nh_persist_end)
-				nh_persist_end++;
-			nh_list->splice(nh_list->end(), *nh_list, list_iter);							// so that it will be deleted first when the cache is full
-#if CACHE_DEBUG
-			debug << "  Moving (" << list_iter->hash << ", " << list_iter->replacement << ") to back of nh_list. (nh_list->end()-1) = ";
-			nhcache_list_iter last = nh_list->end();
-			last--;
-			debug << "(" << last->hash << ", " << last->replacement << ")" << endl;
-
-			debug << "    Distance between nh_persist_end and nh_list->end(): " << distance(nh_persist_end, nh_list->end()) << endl;
-#endif
+			break;
 		}
 
-		handlecache->erase(iter);															// remove entry from handlecache
+	nhcache_list_iter list_iter = nh_map->find(iter->second)->second;					// move list item to back of nh_list
+	if (!list_iter->persist && !reverse_handlecache->count(iter->second)) {				// (if it is not persistent and has no more entries in handlecache)
+		if (list_iter == nh_persist_end)
+			nh_persist_end++;
+		nh_list->splice(nh_list->end(), *nh_list, list_iter);							// so that it will be deleted first when the cache is full
+#if CACHE_DEBUG
+		debug << "  Moving (" << list_iter->hash << ", " << list_iter->replacement << ") to back of nh_list. (nh_list->end()-1) = ";
+		nhcache_list_iter last = nh_list->end();
+		last--;
+		debug << "(" << last->hash << ", " << last->replacement << ")" << endl;
+
+		debug << "    Distance between nh_persist_end and nh_list->end(): " << distance(nh_persist_end, nh_list->end()) << endl;
+#endif
+	}
+
+	handlecache->erase(iter);															// remove entry from handlecache
 
 #if CACHE_DEBUG
 //		debug << "LOCATION 13" << endl;
-		debug << endl;
-		debug.close();
+	debug << endl;
+	debug.close();
 #endif
-	}
 }

@@ -49,13 +49,18 @@ public:
 	TextureCache(unsigned);
 	~TextureCache();
 
-	/*find: determine whether a hash is in the nhcache
+	/*full: determine whether new entries can be inserted into the cache
+	  returns: true if the cache is full of persistent textures, else false
+	*/
+	bool TextureCache::full();
+
+	/*contains: determine whether a hash is in the nhcache
 	  returns: true if hash is in the nh_map, else false
 	*/
 	bool TextureCache::contains(uint64_t hash	// the hash to find
 		);
 
-	/*find: determine whether a HANDLE is in the handlecache
+	/*contains: determine whether a HANDLE is in the handlecache
 	returns: true if HANDLE is in the handlecache map, else false
 	*/
 	bool TextureCache::contains(HANDLE replaced	// the HANDLE to find

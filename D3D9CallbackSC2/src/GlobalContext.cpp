@@ -858,106 +858,113 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 			if (match == Matchtype::MATCH) {
 				debugtype = String("noreplace");
 				if (!texcache->update(Handle, hash)) {							// directly updated if it succeeds we just end unlockrect cycle.
-					string filename = texdir + "textures\\" + texturename.substr(0, 2) + "\\" + texturename.substr(0, texturename.rfind("_")) + "\\" + texturename + ".png";
+					if (!texcache->full()) {
+						string filename = texdir + "textures\\" + texturename.substr(0, 2) + "\\" + texturename.substr(0, texturename.rfind("_")) + "\\" + texturename + ".png";
 
 #if GCONTEXT_DEBUG
-					debug << "  Reading " << filename << "...";
-					debug.flush();
+						debug << "  Reading " << filename << "...";
+						debug.flush();
 #endif
 
-					ifstream ifile(filename);
-					if (!ifile || ifile.fail()) {											// No file, allow normal SetTexture
-						texcache->erase(Handle);
+						ifstream ifile(filename);
+						if (!ifile || ifile.fail()) {											// No file, allow normal SetTexture
+							texcache->erase(Handle);
 #if GCONTEXT_DEBUG
-						debug << " failed." << endl;
+							debug << " failed." << endl;
 #endif
-					} else {																// Load texture into cache
+						} else {																// Load texture into cache
 #if GCONTEXT_DEBUG
-						debug << " succeeded." << endl;
+							debug << " succeeded." << endl;
 #endif
 #if CREATE_TEXTURE_DEBUG && !GCONTEXT_DEBUG
-						ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
-						debug << endl << m << " (" << Handle << "):" << endl;
+							ofstream debug(gcontext_debug_file, fstream::out | fstream::app);
+							debug << endl << m << " (" << Handle << "):" << endl;
 #endif
 #if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
-						debug << "  Creating new texture...";
+							debug << "  Creating new texture...";
 #if CREATE_TEXTURE_DEBUG
-						debug << endl;
+							debug << endl;
 #endif
 #endif
 
-						Bitmap Bmp;
-						Bmp.LoadPNG(String(filename.c_str()));
+							Bitmap Bmp;
+							Bmp.LoadPNG(String(filename.c_str()));
 
-						size_t new_width = resize_factor * (float)Desc.Width;
-						size_t new_height = resize_factor * (float)Desc.Height;
-						if (new_width >= Bmp.Width() && new_height >= Bmp.Height()) {		// replaced HANDLE is large enough for the replacement
+							size_t new_width = resize_factor * (float)Desc.Width;
+							size_t new_height = resize_factor * (float)Desc.Height;
+							if (new_width >= Bmp.Width() && new_height >= Bmp.Height()) {		// replaced HANDLE is large enough for the replacement
 #if CREATE_TEXTURE_DEBUG
-							debug << "    texture appropriate for replacement; " << Desc.Width << "x" << Desc.Height << " vs " << Bmp.Width() << "x" << Bmp.Height() << endl;
+								debug << "    texture appropriate for replacement; " << Desc.Width << "x" << Desc.Height << " vs " << Bmp.Width() << "x" << Bmp.Height() << endl;
 #endif
-							LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
-							IDirect3DTexture9* newtexture;
-							HRESULT result = Device->CreateTexture(new_width, new_height, 0, D3DUSAGE_AUTOGENMIPMAP, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newtexture, NULL);
+								LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
+								IDirect3DTexture9* newtexture;
+								HRESULT result = Device->CreateTexture(new_width, new_height, 0, D3DUSAGE_AUTOGENMIPMAP, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newtexture, NULL);
 
-							if (SUCCEEDED(result)) {										// newtexture successfully created
+								if (SUCCEEDED(result)) {										// newtexture successfully created
 #if CREATE_TEXTURE_DEBUG
-								debug << "    newtexture created; HRESULT = " << result << endl;
+									debug << "    newtexture created; HRESULT = " << result << endl;
 #endif
 
-								D3DLOCKED_RECT newRect;
-								result = newtexture->LockRect(0, &newRect, NULL, 0);
+									D3DLOCKED_RECT newRect;
+									result = newtexture->LockRect(0, &newRect, NULL, 0);
 
-								if (SUCCEEDED(result)) {									// newtexture successfully locked
+									if (SUCCEEDED(result)) {									// newtexture successfully locked
 #if CREATE_TEXTURE_DEBUG
-									debug << "    newtexture locked; HRESULT = " << result << endl;
+										debug << "    newtexture locked; HRESULT = " << result << endl;
 #endif
 
-									BYTE* newData = (BYTE *)newRect.pBits;
+										BYTE* newData = (BYTE *)newRect.pBits;
 
-									for (UINT y = 0; y < Bmp.Height(); y++) {
-										RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
-										for (UINT x = 0; x < Bmp.Width(); x++) {			// works for textures of any size (e.g. 4-bit indexed)
-											RGBColor Color = Bmp[Bmp.Height() - y - 1][x];  // must flip image
-											CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+										for (UINT y = 0; y < Bmp.Height(); y++) {
+											RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
+											for (UINT x = 0; x < Bmp.Width(); x++) {			// works for textures of any size (e.g. 4-bit indexed)
+												RGBColor Color = Bmp[Bmp.Height() - y - 1][x];  // must flip image
+												CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+											}
 										}
-									}
-									result = newtexture->UnlockRect(0);						// Texture loaded
+										result = newtexture->UnlockRect(0);						// Texture loaded
 
-									if (SUCCEEDED(result)) {
+										if (SUCCEEDED(result)) {
 #if CREATE_TEXTURE_DEBUG
-										debug << "    newtexture loaded and unlocked; HRESULT = " << result << endl;
+											debug << "    newtexture loaded and unlocked; HRESULT = " << result << endl;
 #endif
 
-										HANDLE newhandle = (HANDLE)newtexture;
-										texcache->insert(Handle, hash, newhandle, persist);
-										debugtype = String("replaced");
+											HANDLE newhandle = (HANDLE)newtexture;
+											texcache->insert(Handle, hash, newhandle, persist);
+											debugtype = String("replaced");
 #if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
-										debug << "  succeeded. newhandle = " << newhandle << "." << endl;
+											debug << "  succeeded. newhandle = " << newhandle << "." << endl;
 #endif
+										} else {
+											texcache->erase(Handle);
+#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
+											debug << "    ERROR: could not unlock newtexture; HRESULT = " << result << endl;
+#endif
+										}
 									} else {
 										texcache->erase(Handle);
 #if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
-										debug << "    ERROR: could not unlock newtexture; HRESULT = " << result << endl;
+										debug << "    ERROR: could not lock newtexture; HRESULT = " << result << endl;
 #endif
 									}
 								} else {
 									texcache->erase(Handle);
 #if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
-									debug << "    ERROR: could not lock newtexture; HRESULT = " << result << endl;
+									debug << "    ERROR: could not create newtexture; HRESULT = " << result << endl;
 #endif
 								}
 							} else {
 								texcache->erase(Handle);
 #if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
-								debug << "    ERROR: could not create newtexture; HRESULT = " << result << endl;
+								debug << "    ERROR: texture too small for replacement; " << Desc.Width << "x" << Desc.Height << " vs " << Bmp.Width() << "x" << Bmp.Height() << endl;
 #endif
 							}
-						} else {
-							texcache->erase(Handle);
-#if GCONTEXT_DEBUG || CREATE_TEXTURE_DEBUG
-							debug << "    ERROR: texture too small for replacement; " << Desc.Width << "x" << Desc.Height << " vs " << Bmp.Width() << "x" << Bmp.Height() << endl;
-#endif
 						}
+					} else {													// if the cache is full, no new texture need be created
+						texcache->erase(Handle);
+#if GCONTEXT_DEBUG
+						debug << "  Texture cache is full - abandoning newhandle creation." << endl;
+#endif
 					}
 				}
 #if GCONTEXT_DEBUG
