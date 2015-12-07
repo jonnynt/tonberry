@@ -7,53 +7,67 @@
 string debug_file = "tonberry\\debug\\texture_cache.log";
 #endif
 
-size_t FieldMap::count(uint64_t hash)
+size_t FieldMap::count(uint64_t upper_hash, uint64_t lower_hash)
 {
-	fieldmap_iter iter = fieldmap.find(hash);
-	
-	return (iter == fieldmap.end()) ? 0 : iter->second.size();
+	outermap_iter out_iter = fieldmap.find(upper_hash);
+	if (out_iter == fieldmap.end()) return 0;
+
+	innermap_iter in_iter = out_iter->second.find(lower_hash);
+	return (in_iter == out_iter->second.end()) ? 0 : in_iter->second.size();
 }
 
-void FieldMap::insert(uint64_t hash, const string& field)
+void FieldMap::insert(uint64_t upper_hash, uint64_t lower_hash, const string& field)
 {
 	fieldset_iter ptr_to_field_name = fieldset.insert(field).first;
-	fieldmap[hash].insert(ptr_to_field_name);
+	fieldmap[upper_hash][lower_hash].insert(ptr_to_field_name);
 }
 
-bool FieldMap::get_fields(uint64_t hash, unordered_set<string>& result)
+bool FieldMap::get_fields(uint64_t upper_hash, uint64_t lower_hash, unordered_set<string>& result)
 {
-	fieldmap_iter map_iter;
-	if ((map_iter = fieldmap.find(hash)) == fieldmap.end()) return false;
+	outermap_iter out_iter = fieldmap.find(upper_hash);
+	if (out_iter == fieldmap.end()) return false;
+
+	innermap_iter in_iter = out_iter->second.find(lower_hash);
+	if (in_iter == out_iter->second.end()) return false;
 
 	fieldset_iter_set_iter match_iter;
-	for (match_iter = map_iter->second.begin(); match_iter != map_iter->second.end(); match_iter++)
+	for (match_iter = in_iter->second.begin(); match_iter != in_iter->second.end(); match_iter++)
 		result.insert(**match_iter);
 
 	return true;
 }
 
-bool FieldMap::get_first_field(uint64_t hash, string& result)
+bool FieldMap::get_first_field(uint64_t upper_hash, uint64_t lower_hash, string& result)
 {
-	fieldmap_iter iter;
-	if ((iter = fieldmap.find(hash)) == fieldmap.end()) return false;
+	outermap_iter out_iter = fieldmap.find(upper_hash);
+	if (out_iter == fieldmap.end()) return false;
 
-	result = **(iter->second.begin());
+	innermap_iter in_iter = out_iter->second.find(lower_hash);
+	if (in_iter == out_iter->second.end()) return false;
+
+	result = **(in_iter->second.begin());
 
 	return true;
 }
 
-bool FieldMap::get_intersection(uint64_t hash_1, uint64_t hash_2, unordered_set<string>& result)
+bool FieldMap::get_intersection(uint64_t upper_hash_1, uint64_t lower_hash_1, uint64_t upper_hash_2, uint64_t lower_hash_2, unordered_set<string>& result)
 {
-	fieldmap_iter iter_1, iter_2;
+	outermap_iter out_iter_1, out_iter_2;
+	innermap_iter in_iter_1, in_iter_2;
 	fieldset_iter_set_t intersection;
 
-	// search for hash_upper
-	if ((iter_1 = fieldmap.find(hash_1)) == fieldmap.end() ||
-		(iter_2 = fieldmap.find(hash_2)) == fieldmap.end())
+	// search for upper hashes
+	if ((out_iter_1 = fieldmap.find(upper_hash_1)) == fieldmap.end() ||
+		(out_iter_2 = fieldmap.find(upper_hash_2)) == fieldmap.end())
+		return false;
+
+	// search for lower hashes
+	if ((in_iter_1 = out_iter_1->second.find(lower_hash_1)) == out_iter_1->second.end() ||
+		(in_iter_2 = out_iter_2->second.find(lower_hash_2)) == out_iter_2->second.end())
 		return false;
 	
-	set_intersection(iter_1->second.begin(), iter_1->second.end(),
-					 iter_2->second.begin(), iter_2->second.end(),
+	set_intersection(in_iter_1->second.begin(), in_iter_1->second.end(),
+					 in_iter_2->second.begin(), in_iter_2->second.end(),
 					 inserter(intersection, intersection.end()), fieldset_iter_compare());
 
 	if (intersection.size() == 0) return false;
@@ -67,14 +81,19 @@ bool FieldMap::get_intersection(uint64_t hash_1, uint64_t hash_2, unordered_set<
 
 void FieldMap::writeMap(ofstream& out)
 {
-	fieldmap_iter map_iter;
-	for (map_iter = fieldmap.begin(); map_iter != fieldmap.end(); map_iter++) {
-		out << map_iter->first << ":";
-		fieldset_iter_set_iter field_iter;
-		for (field_iter = map_iter->second.begin(); field_iter != map_iter->second.end(); field_iter++) {
-			out << " " << **field_iter << ";";
+	outermap_iter out_iter;
+	for (out_iter = fieldmap.begin(); out_iter != fieldmap.end(); out_iter++) {
+		out << out_iter->first << ":" << endl;
+
+		innermap_iter in_iter;
+		for (in_iter = out_iter->second.begin(); in_iter != out_iter->second.end(); in_iter++) {
+			out << "\t" << in_iter->first << ":";
+			fieldset_iter_set_iter field_iter;
+			for (field_iter = in_iter->second.begin(); field_iter != in_iter->second.end(); field_iter++) {
+				out << " " << **field_iter << ";";
+			}
+			out << endl;
 		}
-		out << endl;
 	}
 }
 

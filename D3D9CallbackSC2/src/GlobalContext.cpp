@@ -1,5 +1,7 @@
 #include "Main.h"
 #include "cachemap.h"
+#include "hashcoord.h"
+#include "texturehash.h"
 #include <stdint.h>
 #include <sstream>
 #include <boost/filesystem.hpp>
@@ -14,18 +16,6 @@ bool g_ReportingEvents = false;
 typedef unsigned char uchar;
 
 GlobalContext *g_Context;
-
-// simple structure for storing pixel coordinates (x,y)
-typedef struct coord
-{
-	int x;
-	int y;
-
-	bool operator<(const coord& rhs) const
-	{
-		return (rhs.y > y) || (rhs.y == y && rhs.x > x);
-	}
-} coord;
 
 template <typename T>
 T ToNumber(const std::string& Str)	//convert string to uint64_t
@@ -60,6 +50,7 @@ fs::path TONBERRY_DIR("tonberry");
 fs::path TEXTURES_DIR("textures");
 fs::path DEBUG_DIR(TONBERRY_DIR / "debug");
 fs::path HASHMAP_DIR(TONBERRY_DIR / "hashmap");
+fs::path COORDS_CSV(TONBERRY_DIR / "coords.csv");
 fs::path PREFS_TXT(TONBERRY_DIR / "prefs.txt");
 fs::path ERROR_LOG(TONBERRY_DIR / "error.log");
 fs::path DEBUG_LOG(DEBUG_DIR / "debug.log");
@@ -68,35 +59,8 @@ fs::path COLLISIONS_CSV(TONBERRY_DIR / "collisions.csv");
 fs::path HASHMAP2_CSV(TONBERRY_DIR / "hash2map.csv");
 fs::path OBJECTS_CSV(TONBERRY_DIR / "objmap.csv");
 
-
-
-//
-// FNV HASH CONSTANTS
-//
-
-const uint64_t FNV_HASH_LEN		= 64;						// length of FNV hash in bits
-const uint64_t FNV_MODULO			= 1 << FNV_HASH_LEN;	// implicit: since uint64_t is 64-bits, overflow is equivalent to modulo
-const uint64_t FNV_OFFSET_BASIS	= 14695981039346656037;		// starting value of FNV hash
-const uint64_t FNV_OFFSET_PRIME	= 1099511628211;
-
-// coordinates based on variance and frequently-colliding pixels 
-// used with FNV-1a Hash Algorithm
-const int FNV_COORDS_LEN = 121;
-const coord FNV_COORDS[FNV_COORDS_LEN] = { coord{ 11, 9 }, coord{ 22, 7 }, coord{ 28, 7 }, coord{ 39, 9 }, coord{ 53, 9 }, coord{ 60, 7 }, coord{ 76, 11 }, coord{ 88, 8 }, coord{ 91, 11 }, coord{ 102, 7 }, coord{ 115, 9 }, coord{ 11, 15 }, coord{ 22, 19 }, coord{ 28, 20 }, coord{ 40, 22 }, coord{ 54, 16 }, coord{ 60, 17 }, coord{ 76, 17 }, coord{ 87, 20 }, coord{ 91, 20 }, coord{ 107, 20 }, coord{ 115, 13 }, coord{ 11, 24 }, coord{ 22, 29 }, coord{ 28, 30 }, coord{ 39, 29 }, coord{ 46, 30 }, coord{ 60, 30 }, coord{ 70, 30 }, coord{ 87, 25 }, coord{ 93, 25 }, coord{ 102, 27 }, coord{ 115, 33 }, coord{ 11, 38 }, coord{ 22, 39 }, coord{ 28, 44 }, coord{ 39, 41 }, coord{ 55, 35 }, coord{ 60, 38 }, coord{ 70, 40 }, coord{ 87, 37 }, coord{ 99, 44 }, coord{ 102, 43 }, coord{ 115, 35 }, coord{ 11, 50 }, coord{ 21, 46 }, coord{ 25, 51 }, coord{ 40, 48 }, coord{ 46, 46 }, coord{ 60, 46 }, coord{ 76, 47 }, coord{ 87, 47 }, coord{ 93, 49 }, coord{ 107, 53 }, coord{ 115, 49 }, coord{ 11, 61 }, coord{ 22, 59 }, coord{ 25, 59 }, coord{ 40, 59 }, coord{ 55, 57 }, coord{ 60, 61 }, coord{ 70, 58 }, coord{ 87, 59 }, coord{ 99, 58 }, coord{ 102, 59 }, coord{ 115, 57 }, coord{ 7, 77 }, coord{ 21, 77 }, coord{ 24, 71 }, coord{ 36, 77 }, coord{ 46, 76 }, coord{ 60, 77 }, coord{ 70, 70 }, coord{ 87, 71 }, coord{ 93, 77 }, coord{ 102, 69 }, coord{ 115, 77 }, coord{ 11, 84 }, coord{ 21, 80 }, coord{ 27, 85 }, coord{ 39, 79 }, coord{ 55, 85 }, coord{ 60, 81 }, coord{ 75, 86 }, coord{ 82, 84 }, coord{ 93, 84 }, coord{ 107, 79 }, coord{ 115, 79 }, coord{ 11, 92 }, coord{ 22, 97 }, coord{ 28, 90 }, coord{ 40, 93 }, coord{ 46, 92 }, coord{ 60, 91 }, coord{ 76, 97 }, coord{ 82, 98 }, coord{ 93, 90 }, coord{ 102, 99 }, coord{ 115, 99 }, coord{ 6, 107 }, coord{ 22, 101 }, coord{ 31, 102 }, coord{ 41, 108 }, coord{ 55, 107 }, coord{ 60, 107 }, coord{ 70, 104 }, coord{ 87, 101 }, coord{ 93, 105 }, coord{ 102, 101 }, coord{ 115, 109 }, coord{ 11, 112 }, coord{ 21, 112 }, coord{ 27, 113 }, coord{ 41, 112 }, coord{ 55, 113 }, coord{ 60, 120 }, coord{ 70, 116 }, coord{ 82, 112 }, coord{ 93, 113 }, coord{ 107, 117 }, coord{ 115, 113 } };
-
-uint64_t uint64_tpow(uint64_t base, int exp)				// calculate base^exp modulo uint64_t_MAX
-{
-	uint64_t result = 1;
-	for (int i = 0; i < exp; i++)
-		result *= base;
-
-	return result;
-}
-
-uint64_t FNV_NOLOWER_FACTOR		= uint64_tpow(FNV_OFFSET_PRIME, FNV_COORDS_LEN);			// multiplying an upper 128x128 object hash by this factor is equivalent to hashing a 128x256 object pair where the lower object is all (0,0,0)
-uint64_t FNV_NOLOWER_RGB_FACTOR	= FNV_NOLOWER_FACTOR * uint64_tpow(FNV_OFFSET_PRIME, 3);	// same as above except includes RGB averages as well
-uint64_t FNV_NOUPPER_BASIS		= FNV_OFFSET_BASIS * FNV_NOLOWER_FACTOR;					// starting a lower 128x128 object hash with this basis is equivalent to hashing a 128x256 object pair where the upper object is all (0,0,0)
-uint64_t FNV_NOUPPER_RGB_BASIS	= FNV_OFFSET_BASIS * FNV_NOLOWER_RGB_FACTOR;				// same as above except includes RGB averages as well
+const size_t COORDS_LEN = 324;
+const HashCoord COORDS[COORDS_LEN] = { HashCoord(6, 7), HashCoord(14, 7), HashCoord(20, 7), HashCoord(26, 6), HashCoord(30, 7), HashCoord(38, 7), HashCoord(49, 6), HashCoord(52, 7), HashCoord(58, 6), HashCoord(70, 7), HashCoord(74, 7), HashCoord(82, 7), HashCoord(86, 7), HashCoord(98, 7), HashCoord(100, 7), HashCoord(108, 7), HashCoord(114, 7), HashCoord(122, 7), HashCoord(7, 13), HashCoord(14, 14), HashCoord(18, 14), HashCoord(26, 14), HashCoord(34, 14), HashCoord(42, 14), HashCoord(46, 14), HashCoord(56, 14), HashCoord(58, 14), HashCoord(70, 13), HashCoord(74, 14), HashCoord(82, 12), HashCoord(90, 12), HashCoord(98, 14), HashCoord(102, 13), HashCoord(108, 12), HashCoord(114, 14), HashCoord(122, 12), HashCoord(6, 17), HashCoord(14, 19), HashCoord(18, 20), HashCoord(26, 18), HashCoord(34, 21), HashCoord(40, 20), HashCoord(44, 21), HashCoord(54, 21), HashCoord(58, 18), HashCoord(70, 17), HashCoord(74, 20), HashCoord(82, 17), HashCoord(90, 18), HashCoord(94, 21), HashCoord(104, 20), HashCoord(108, 21), HashCoord(114, 21), HashCoord(122, 20), HashCoord(7, 27), HashCoord(14, 27), HashCoord(20, 28), HashCoord(26, 26), HashCoord(34, 26), HashCoord(40, 28), HashCoord(44, 25), HashCoord(54, 24), HashCoord(58, 26), HashCoord(70, 27), HashCoord(76, 27), HashCoord(82, 28), HashCoord(88, 26), HashCoord(94, 28), HashCoord(102, 25), HashCoord(108, 25), HashCoord(114, 28), HashCoord(122, 28), HashCoord(6, 35), HashCoord(12, 35), HashCoord(18, 30), HashCoord(24, 34), HashCoord(34, 30), HashCoord(40, 32), HashCoord(44, 31), HashCoord(52, 30), HashCoord(58, 30), HashCoord(66, 30), HashCoord(76, 31), HashCoord(82, 35), HashCoord(88, 30), HashCoord(93, 31), HashCoord(104, 34), HashCoord(108, 33), HashCoord(114, 30), HashCoord(121, 35), HashCoord(6, 41), HashCoord(14, 39), HashCoord(20, 40), HashCoord(24, 42), HashCoord(30, 39), HashCoord(40, 40), HashCoord(44, 37), HashCoord(54, 42), HashCoord(58, 38), HashCoord(70, 41), HashCoord(72, 38), HashCoord(82, 38), HashCoord(88, 40), HashCoord(94, 41), HashCoord(102, 37), HashCoord(108, 42), HashCoord(116, 41), HashCoord(122, 42), HashCoord(6, 44), HashCoord(14, 47), HashCoord(18, 44), HashCoord(24, 44), HashCoord(34, 46), HashCoord(40, 44), HashCoord(48, 44), HashCoord(54, 45), HashCoord(58, 44), HashCoord(70, 45), HashCoord(74, 44), HashCoord(84, 45), HashCoord(90, 44), HashCoord(93, 45), HashCoord(102, 45), HashCoord(108, 44), HashCoord(114, 44), HashCoord(121, 44), HashCoord(6, 53), HashCoord(14, 51), HashCoord(18, 52), HashCoord(25, 51), HashCoord(34, 54), HashCoord(40, 52), HashCoord(48, 51), HashCoord(52, 51), HashCoord(58, 54), HashCoord(70, 53), HashCoord(74, 51), HashCoord(82, 52), HashCoord(90, 51), HashCoord(94, 51), HashCoord(100, 51), HashCoord(108, 51), HashCoord(114, 52), HashCoord(121, 54), HashCoord(6, 62), HashCoord(12, 59), HashCoord(18, 60), HashCoord(24, 60), HashCoord(30, 59), HashCoord(40, 58), HashCoord(44, 59), HashCoord(56, 58), HashCoord(58, 58), HashCoord(70, 58), HashCoord(75, 58), HashCoord(84, 58), HashCoord(88, 58), HashCoord(98, 58), HashCoord(102, 58), HashCoord(108, 58), HashCoord(114, 58), HashCoord(121, 62), HashCoord(7, 70), HashCoord(12, 69), HashCoord(18, 70), HashCoord(26, 70), HashCoord(34, 70), HashCoord(40, 68), HashCoord(44, 70), HashCoord(52, 70), HashCoord(60, 69), HashCoord(70, 69), HashCoord(74, 68), HashCoord(82, 70), HashCoord(86, 69), HashCoord(94, 67), HashCoord(104, 70), HashCoord(108, 69), HashCoord(116, 67), HashCoord(122, 66), HashCoord(7, 77), HashCoord(14, 77), HashCoord(18, 76), HashCoord(26, 74), HashCoord(30, 75), HashCoord(40, 76), HashCoord(46, 77), HashCoord(52, 75), HashCoord(58, 76), HashCoord(70, 77), HashCoord(76, 75), HashCoord(84, 77), HashCoord(86, 77), HashCoord(98, 76), HashCoord(104, 74), HashCoord(108, 75), HashCoord(114, 76), HashCoord(121, 74), HashCoord(7, 79), HashCoord(14, 79), HashCoord(20, 79), HashCoord(25, 79), HashCoord(34, 84), HashCoord(40, 84), HashCoord(44, 79), HashCoord(54, 79), HashCoord(58, 79), HashCoord(70, 79), HashCoord(74, 84), HashCoord(82, 84), HashCoord(88, 80), HashCoord(98, 82), HashCoord(104, 84), HashCoord(112, 83), HashCoord(114, 84), HashCoord(121, 84), HashCoord(7, 87), HashCoord(14, 87), HashCoord(18, 86), HashCoord(26, 86), HashCoord(34, 86), HashCoord(40, 86), HashCoord(44, 87), HashCoord(51, 86), HashCoord(58, 86), HashCoord(70, 87), HashCoord(76, 87), HashCoord(82, 87), HashCoord(86, 87), HashCoord(98, 86), HashCoord(104, 86), HashCoord(108, 87), HashCoord(114, 86), HashCoord(122, 86), HashCoord(6, 97), HashCoord(13, 97), HashCoord(16, 98), HashCoord(24, 98), HashCoord(32, 98), HashCoord(40, 96), HashCoord(48, 98), HashCoord(52, 98), HashCoord(58, 96), HashCoord(70, 97), HashCoord(76, 98), HashCoord(80, 98), HashCoord(86, 97), HashCoord(96, 98), HashCoord(105, 98), HashCoord(110, 97), HashCoord(114, 98), HashCoord(121, 98), HashCoord(7, 101), HashCoord(14, 101), HashCoord(16, 102), HashCoord(24, 102), HashCoord(30, 101), HashCoord(38, 101), HashCoord(46, 101), HashCoord(52, 102), HashCoord(62, 101), HashCoord(68, 102), HashCoord(76, 102), HashCoord(84, 102), HashCoord(91, 105), HashCoord(94, 101), HashCoord(102, 101), HashCoord(107, 101), HashCoord(114, 101), HashCoord(121, 102), HashCoord(7, 107), HashCoord(13, 107), HashCoord(21, 108), HashCoord(23, 107), HashCoord(31, 107), HashCoord(41, 108), HashCoord(45, 107), HashCoord(51, 107), HashCoord(58, 112), HashCoord(69, 108), HashCoord(77, 107), HashCoord(84, 111), HashCoord(91, 107), HashCoord(93, 108), HashCoord(103, 107), HashCoord(107, 107), HashCoord(116, 112), HashCoord(121, 108), HashCoord(6, 116), HashCoord(14, 115), HashCoord(20, 116), HashCoord(25, 114), HashCoord(33, 114), HashCoord(40, 116), HashCoord(44, 116), HashCoord(52, 114), HashCoord(58, 114), HashCoord(70, 117), HashCoord(74, 116), HashCoord(84, 114), HashCoord(86, 115), HashCoord(93, 114), HashCoord(102, 115), HashCoord(110, 115), HashCoord(114, 114), HashCoord(122, 115), HashCoord(7, 123), HashCoord(14, 121), HashCoord(21, 121), HashCoord(26, 121), HashCoord(34, 121), HashCoord(42, 121), HashCoord(44, 121), HashCoord(52, 121), HashCoord(58, 121), HashCoord(69, 121), HashCoord(74, 121), HashCoord(82, 121), HashCoord(87, 121), HashCoord(93, 121), HashCoord(100, 121), HashCoord(107, 121), HashCoord(114, 121), HashCoord(122, 121) };
 
 //
 // USER PREFERENCES
@@ -104,8 +68,7 @@ uint64_t FNV_NOUPPER_RGB_BASIS	= FNV_OFFSET_BASIS * FNV_NOLOWER_RGB_FACTOR;				/
 
 float RESIZE_FACTOR = 4.0;		// texture upscale factor
 bool DEBUG = false;				// write debug information
-unsigned CACHE_SIZE = 100;		// cache size in megabytes
-
+unsigned CACHE_SIZE = 100;		// number of textures to hold in the cache size
 
 void GraphicsInfo::Init()
 {
@@ -175,7 +138,7 @@ void load_fieldmaps()
 				hashfile.open(it->path().string(), ifstream::in);							// open it and dump into the map
 				if (hashfile.is_open()) {
 					string line;
-					while (getline(hashfile, line))											// Omzy's original code
+					while (getline(hashfile, line))
 					{
 						// split line on ','
 						std::deque<string> items;
@@ -185,8 +148,8 @@ void load_fieldmaps()
 							items.push_back(item);
 						}
 
-						// format is "<field_name>,<hash_combined>{,<hash_upper>,<hash_lower>}"
-						if (items.size() != 2 && items.size() != 4) {
+						// format is "<field_name>,<hash_upper>{,<hash_lower>}
+						if (!(items.size() == 2 || items.size() == 3)) {
 							ofstream err;													//Error reporting
 							err.open(ERROR_LOG.string(), ofstream::out | ofstream::app);
 							err << "Error: bad hashmap. Format is \"<field_name>,<hash_combined>{,<hash_upper>,<hash_lower>}\": " << it->path().string() << endl;
@@ -197,16 +160,14 @@ void load_fieldmaps()
 						// field names are stored only once
 						string field = items[0];
 
-						uint64_t hash_combined = ToNumber<uint64_t>(items[1]);
-						fieldmap->insert(hash_combined, field);
+						uint64_t hash_upper, hash_lower = 0;
+						hash_upper = ToNumber<uint64_t>(items[1]);
 
 						if (items.size() > 2) {
-							uint64_t hash_upper = ToNumber<uint64_t>(items[2]);
-							fieldmap->insert(hash_upper, field);
-
-							uint64_t hash_lower = ToNumber<uint64_t>(items[3]);
-							fieldmap->insert(hash_lower, field);
+							uint64_t hash_lower = ToNumber<uint64_t>(items[2]);
 						}
+
+						fieldmap->insert(hash_upper, hash_lower, field);
 					}
 					hashfile.close();
 				} else {
@@ -247,187 +208,30 @@ void GlobalContext::Init()
 	debug.close();
 }
 
-// fast 64-bit hash 
-uint64_t FNV_Hash(BYTE* pData, UINT pitch, int width, int height, const coord* coords, const int len, bool use_RGB = true)
+uint64_t Murmur2_Hash(BYTE* pData, UINT pitch, int width, int height, const HashCoord* coords, const int len)
 {
-	uint64_t hash = FNV_OFFSET_BASIS;
+	int buflen = len * 3;
+	char* buf = new char[buflen];
+	int index = 0;
 
-	float red = 0, green = 0, blue = 0;
-	size_t coord_count = 0;
-	for (int i = 0; i < len; i++) {
-		coord point = coords[i];
-		unsigned char val = 0;
-		if (point.x < width && point.y < height) { //respect texture sizes
-			
-			RGBColor* CurRow = (RGBColor*)(pData + (point.y) * pitch);
-			RGBColor Color = CurRow[point.x];
-			val = round((Color.r + Color.g + Color.b) / 3);
-
-			// keep track of RGB sums of pixels
-			if (use_RGB) {
-				red		+= Color.r;
-				green	+= Color.g;;
-				blue	+= Color.b;
-			}
+	const HashCoord* coord = coords;
+	for (int i = 0; i < len; i++, coord++) {
+		RGBColor color(0, 0, 0);
+		if (coord->x < width && coord->y < height) {
+			RGBColor* row = (RGBColor*)(pData + (coord->y) * pitch);
+			color = row[coord->x];
 		}
-
-		hash ^= val;
-		hash *= FNV_OFFSET_PRIME;
-		coord_count++;
+		buf[index++] = color.r;
+		buf[index++] = color.g;
+		buf[index++] = color.b;
 	}
 
-	// factor RGB averages into hash
-	if (use_RGB) {
-		red /= coord_count;
-		green /= coord_count;
-		blue /= coord_count;
-
-		hash ^= (uchar)round(red);
-		hash *= FNV_OFFSET_PRIME;
-		hash ^= (uchar)round(green);
-		hash *= FNV_OFFSET_PRIME;
-		hash ^= (uchar)round(blue);
-		hash *= FNV_OFFSET_PRIME;
-	}
-
+	uint64_t hash = TextureHash::Murmur2::MurmurHash64B(buf, buflen, TextureHash::Murmur2::MURMUR2_SEED);
+	delete[] buf;
 	return hash;
 }
 
-uint64_t FNV_Hash_Full(BYTE* pData, UINT pitch, int width, int height, int start_x = 0)
-{
-	uint64_t hash = FNV_OFFSET_BASIS;
-
-	float red = 0, green = 0, blue = 0;
-	size_t coord_count = 0;
-	for (int y = 0; y < height; y++) {
-		RGBColor* CurRow = (RGBColor*)(pData + y * pitch);
-		for (int x = start_x; x < width; x++) {
-			RGBColor Color = CurRow[x];
-			hash ^= Color.r;
-			hash *= FNV_OFFSET_PRIME;
-			hash ^= Color.g;
-			hash *= FNV_OFFSET_PRIME;
-			hash ^= Color.b;
-			hash *= FNV_OFFSET_PRIME;
-		}
-	}
-
-	return hash;
-}
-
-// hash upper, lower, and combined separately 
-uint64_t FNV_Hash_Combined(BYTE* pData, UINT pitch, int width, int height, uint64_t& hash_upper, uint64_t& hash_lower, const coord* coords, const int len, bool use_RGB = true)
-{
-	hash_lower = (height > VRAM_DIM / 2) ? (use_RGB) ? FNV_NOUPPER_RGB_BASIS : FNV_NOUPPER_BASIS : 0;
-
-	uint64_t hash = FNV_OFFSET_BASIS;
-
-	float red = 0, green = 0, blue = 0;
-	size_t coord_count = 0;
-	for (int i = 0; i < len; i++) {
-		coord point = coords[i];
-		unsigned char val = 0;
-		if (point.x < width && point.y < height) { //respect texture sizes
-
-			RGBColor* CurRow = (RGBColor*)(pData + (point.y) * pitch);
-			RGBColor Color = CurRow[point.x];
-			val = round((Color.r + Color.g + Color.b) / 3);
-
-			// keep track of RGB sums of pixels
-			if (use_RGB) {
-				red += Color.r;
-				green += Color.g;;
-				blue += Color.b;
-			}
-		}
-
-		hash ^= val;
-		hash *= FNV_OFFSET_PRIME;
-		coord_count++;
-	}
-
-	// factor RGB averages into hash
-	if (use_RGB) {
-		red /= coord_count;
-		green /= coord_count;
-		blue /= coord_count;
-
-		hash ^= (uchar)round(red);
-		hash *= FNV_OFFSET_PRIME;
-		hash ^= (uchar)round(green);
-		hash *= FNV_OFFSET_PRIME;
-		hash ^= (uchar)round(blue);
-		hash *= FNV_OFFSET_PRIME;
-	}
-
-	// set hash_upper equal to hash thus far
-	hash_upper = hash;
-
-	if (hash_lower) {														// make sure texture is big enough to hash lower
-		// adjust hash_upper to include lower blank object
-		hash_upper *= (use_RGB) ? FNV_NOLOWER_RGB_FACTOR : FNV_NOLOWER_FACTOR;
-
-		// adjust img for lower hashing
-		int half_dim = VRAM_DIM / 2;
-		int last_obj_start = height - half_dim;
-		pData += min(last_obj_start, half_dim) * pitch;						// point pData at last place where a full 128x128 object could be hashed but limit it to object directly under upper
-		height = max(last_obj_start, half_dim);
-
-		// hash lower and continue hashing combined
-		red = 0, green = 0, blue = 0;
-		coord_count = 0;
-		for (int i = 0; i < len; i++) {
-			coord point = coords[i];
-			unsigned char val = 0;
-			if (point.x < width && point.y < height) { //respect texture sizes
-
-				RGBColor* CurRow = (RGBColor*)(pData + (point.y) * pitch);
-				RGBColor Color = CurRow[point.x];
-				val = round((Color.r + Color.g + Color.b) / 3);
-
-				// keep track of RGB sums of pixels
-				if (use_RGB) {
-					red += Color.r;
-					green += Color.g;;
-					blue += Color.b;
-				}
-			}
-
-			hash_lower ^= val;
-			hash_lower *= FNV_OFFSET_PRIME;
-
-			hash ^= val;
-			hash *= FNV_OFFSET_PRIME;
-
-			coord_count++;
-		}
-
-		// factor RGB averages into hash
-		if (use_RGB) {
-			red /= coord_count;
-			green /= coord_count;
-			blue /= coord_count;
-
-			hash_lower ^= (uchar)round(red);
-			hash_lower *= FNV_OFFSET_PRIME;
-			hash_lower ^= (uchar)round(green);
-			hash_lower *= FNV_OFFSET_PRIME;
-			hash_lower ^= (uchar)round(blue);
-			hash_lower *= FNV_OFFSET_PRIME;
-
-			hash ^= (uchar)round(red);
-			hash *= FNV_OFFSET_PRIME;
-			hash ^= (uchar)round(green);
-			hash *= FNV_OFFSET_PRIME;
-			hash ^= (uchar)round(blue);
-			hash *= FNV_OFFSET_PRIME;
-		}
-	}
-
-	return hash;
-}
-
-bool get_fields(const uint64_t& hash_combined, const uint64_t& hash_upper, const uint64_t& hash_lower, string& field_combined, string& field_upper, string& field_lower)
+bool get_fields(const uint64_t& hash_upper, const uint64_t& hash_lower, string& field_combined, string& field_upper, string& field_lower)
 {
 	unordered_set<string> fields;
 	int upper_matches = 0, lower_matches = 0;

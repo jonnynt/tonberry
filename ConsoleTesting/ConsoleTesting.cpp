@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/erase.hpp>
 #include <sstream>
 namespace fs = boost::filesystem;
 using std::cout;
@@ -66,15 +67,21 @@ struct image
 {
 	fs::path path;
 	cv::Rect rect;
+	uint64 hash;
 
-	image(fs::path p, cv::Rect r) : path(p), rect(r)
+	image(fs::path p, cv::Rect r, uint64 h = 0) : path(p), rect(r), hash(h)
 	{
 		//mat = cv::imread(path.string(), CV_LOAD_IMAGE_COLOR);
 	}
 
 	cv::Mat mat()
 	{
-		return cv::imread(path.string())(rect);
+		cv::Mat in = cv::imread(path.string());
+		try {
+			return in(rect);
+		} catch (cv::Exception) {
+			return in;
+		}
 	}
 
 	char rect_char()
@@ -91,8 +98,27 @@ struct image
 	}
 };
 
-void get_images(fs::path analysis, deque<image*>& images, unordered_set<uint64>& image_hashes)
+void get_images(fs::path analysis, deque<image*>& images, unordered_set<uint64>& image_hashes, bool name_is_hash = false)
 {
+	if (fs::is_regular_file(analysis)) {
+		ifstream in;
+		in.open(analysis.string().c_str());
+
+		string line;
+		while (getline(in, line)) {
+			string::size_type semi = line.find(';');
+			if (semi == string::npos) continue;
+
+			uint64 hash = _strtoui64(line.substr(0, semi).c_str(), NULL, 10);
+			if (hash == _UI64_MAX || hash == 0) continue;
+			string path = line.substr(semi + 1);
+			boost::erase_all(path, "\"");
+			image * img = new image(fs::path(path), cv::Rect(0, 0, DIM_X, DIM_Y), hash);
+			images.push_back(img);
+			image_hashes.insert(hash);
+		}
+		return;
+	}
 	try {
 		fs::directory_iterator iter(analysis), end;
 		for (; iter != end; iter++) {
@@ -103,7 +129,7 @@ void get_images(fs::path analysis, deque<image*>& images, unordered_set<uint64>&
 				else if (analysis.parent_path().stem().string() == "mapdata2" && !isdigit(path.string().at(path.string().length() - 1)))
 					cout << "Skipping " << path.stem().string() << endl;
 				else*/ if (path.stem().string() != "collisions")
-					get_images(path, images, image_hashes);						// recursive
+					get_images(path, images, image_hashes, name_is_hash);						// recursive
 			}
 			else if (fs::is_regular_file(path) &&
 					(boost::iequals(path.extension().string(), ".bmp") ||
@@ -114,30 +140,37 @@ void get_images(fs::path analysis, deque<image*>& images, unordered_set<uint64>&
 				// 		|_a_|_b_|
 				//		|_c_|_d_|
 
-				// a
-				cv::Rect rect = cv::Rect(0, 0, min(img.cols, DIM_X), min(img.rows, DIM_Y));
-				uint64 hash = Murmur2_Full(img(rect));													// hash the object
-				if (image_hashes.insert(hash).second) images.push_back(new image(path, rect));			// only insert unique objects
+				if (name_is_hash) {																			// only one obj with hash=name
+					cv::Rect rect = cv::Rect(0, 0, min(img.cols, DIM_X), min(img.rows, DIM_Y));
+					string fn = path.stem().string();
+					uint64 hash = _strtoui64(path.stem().string().c_str(), NULL, 10);
+					images.push_back(new image(path, rect, hash));
+				} else {
+					// a
+					cv::Rect rect = cv::Rect(0, 0, min(img.cols, DIM_X), min(img.rows, DIM_Y));
+					uint64 hash = Murmur2_Full(img(rect));													// hash the object
+					if (image_hashes.insert(hash).second) images.push_back(new image(path, rect, hash));	// only insert unique objects
 
-				// b
-				if (img.cols > DIM_X) {
-					rect = cv::Rect(DIM_X, 0, min(img.cols - DIM_X, DIM_X), min(img.rows, DIM_Y));
-					uint64 hash = Murmur2_Full(img(rect));
-					if (image_hashes.insert(hash).second) images.push_back(new image(path, rect));
-				}
+					// b
+					if (img.cols > DIM_X) {
+						rect = cv::Rect(DIM_X, 0, min(img.cols - DIM_X, DIM_X), min(img.rows, DIM_Y));
+						uint64 hash = Murmur2_Full(img(rect));
+						if (image_hashes.insert(hash).second) images.push_back(new image(path, rect, hash));
+					}
 
-				// c
-				if (img.rows > DIM_Y) {
-					rect = cv::Rect(0, DIM_Y, min(img.cols, DIM_X), min(img.rows - DIM_Y, DIM_Y));
-					uint64 hash = Murmur2_Full(img(rect));
-					if (image_hashes.insert(hash).second) images.push_back(new image(path, rect));
-				}
+					// c
+					if (img.rows > DIM_Y) {
+						rect = cv::Rect(0, DIM_Y, min(img.cols, DIM_X), min(img.rows - DIM_Y, DIM_Y));
+						uint64 hash = Murmur2_Full(img(rect));
+						if (image_hashes.insert(hash).second) images.push_back(new image(path, rect, hash));
+					}
 
-				// d
-				if (img.cols > DIM_X && img.rows > DIM_Y) {
-					rect = cv::Rect(DIM_X, DIM_Y, min(img.cols - DIM_X, DIM_X), min(img.rows - DIM_Y, DIM_Y));
-					uint64 hash = Murmur2_Full(img(rect));
-					if (image_hashes.insert(hash).second) images.push_back(new image(path, rect));
+					// d
+					if (img.cols > DIM_X && img.rows > DIM_Y) {
+						rect = cv::Rect(DIM_X, DIM_Y, min(img.cols - DIM_X, DIM_X), min(img.rows - DIM_Y, DIM_Y));
+						uint64 hash = Murmur2_Full(img(rect));
+						if (image_hashes.insert(hash).second) images.push_back(new image(path, rect, hash));
+					}
 				}
 			}
 		}
@@ -150,7 +183,7 @@ typedef long long_dim[DIM_X];
 typedef double double_dim[DIM_X];
 typedef long long_count[255];
 
-void Analyze_Pixels(fs::path analysis, fs::path dest)
+void Analyze_Pixels(fs::path analysis, fs::path dest, bool name_is_hash = false)
 {
 	bool DO_OLD_ALGO = false;
 	bool DO_HIGH_VAR = false;
@@ -164,7 +197,7 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 
 	deque<image*> images;
 	unordered_set<uint64> image_hashes;
-	get_images(analysis, images, image_hashes);
+	get_images(analysis, images, image_hashes, name_is_hash);
 	
 	cout << " found " << images.size() << " images." << endl;
 
@@ -172,6 +205,7 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 	clock_t start_time, end_time, total_time = 0;
 	double avg_time;
 	int collisions = 0;
+	int unique_hashes = 0;
 
 	if (DO_OLD_ALGO) {
 		// hash images using old algorithm
@@ -191,11 +225,14 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 
 		// count collisions
 		collisions = 0;
+		unique_hashes = 0;
 		for (pair<uint64, set<int>> hashset : hashmap) {
+			if (hashset.second.size() < 2) continue;
+			unique_hashes++;
 			collisions += hashset.second.size() - 1;
 		}
 
-		cout << "Omzy:      " << images.size() << " images; " << collisions << " collisions; ~" << avg_time << " ms per image" << endl;
+		cout << "Omzy:      " << images.size() << " images; " << collisions << " collisions; " << unique_hashes << " hashes; ~" << avg_time << " ms per image" << endl;
 	}
 
 	deque<HashCoord> coords;
@@ -344,6 +381,8 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 		}
 
 		// find highest variance in 8x8 blocks - total of (128/9)^2 = 14^2 = 196 coordinates
+		// find highest variance in 6x6 blocks - total of (128/7)^2 = 18^2 = 324 coordinates
+		// generalization: total of (128/(bw+1))*(128/(bh+1)) coordinates
 		int block_width = 6;
 		int block_height = 6;
 
@@ -407,9 +446,11 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 		ofstream collout;
 		collout.open((dest.parent_path() / "analysis_collisions.csv").string());
 		collisions = 0;
+		unique_hashes = 0;
 		map<HashCoord, int> collision_coords;
 		for (pair<uint64, set<int>> hashset : hashmap) {
 			if (hashset.second.size() < 2) continue;
+			unique_hashes++;
 			collisions += hashset.second.size() - 1;
 
 			// write collisions to collout
@@ -419,7 +460,7 @@ void Analyze_Pixels(fs::path analysis, fs::path dest)
 			}
 			collout << endl;
 		}
-		cout << "Low-Mode (" << coords.size() << "): " << images.size() << " images; " << collisions << " collisions; ~" << avg_time << " ms per image" << endl;
+		cout << "Low-Mode (" << coords.size() << "): " << images.size() << " images; " << collisions << " collisions; " << unique_hashes << " hashes; ~" << avg_time << " ms per image" << endl;
 
 		out << endl;
 		out.close();
@@ -958,18 +999,137 @@ void Test_Hash2_Collisions()
 
 }
 
+void Copy_Unique(fs::path root, fs::path dest)
+{
+	cout << "Reading existing unique images...";
+
+	deque<image*> existing, new_images;
+	unordered_set<uint64> image_hashes;
+	get_images(dest, existing, image_hashes, true);
+
+	cout << " found " << existing.size() << " existing images." << endl;
+
+	cout << "Reading new images...";
+	get_images(root, new_images, image_hashes, false);
+
+	cout << " found " << new_images.size() << " new images." << endl;
+	cout << "Copying unique images...";
+
+	uint64 successful = 0;
+
+	for (image * img : new_images) {
+		cv::Mat mat = img->mat();
+		stringstream ss;
+		ss << img->hash << ".bmp";
+		string filename = ss.str();
+		successful += cv::imwrite((dest / filename).string(), mat);
+	}
+
+	cout << " successfully wrote " << successful << " unique images to " << dest.string() << "." << endl;
+}
+
+void Find_Similar_Images(image base_img, fs::path root, unsigned max_diff, bool name_is_hash = false)
+{
+	cout << "Reading images...";
+
+	deque<image*> images;
+	unordered_set<uint64> image_hashes;
+	get_images(root, images, image_hashes, name_is_hash);
+
+	cout << " found " << images.size() << " images." << endl;
+	cout << "Finding images that differ from " << base_img.path.filename() << " by 0 < x <= " << max_diff << " pixels:" << endl;;
+
+	// create root/../similar
+	fs::path sim_dir = root.parent_path() / "similar";
+	if (!fs::exists(sim_dir))
+		fs::create_directory(sim_dir);
+
+	// create root/../similar/<stem>
+	sim_dir /= base_img.path.stem().string();
+	if (!fs::exists(sim_dir))
+		fs::create_directory(sim_dir);
+
+	// copy base_img to root/../similar/<stem>/<filename>
+	fs::copy_file(base_img.path, sim_dir / base_img.path.filename(), fs::copy_option::overwrite_if_exists);
+
+	cv::Mat base_mat = base_img.mat();
+	unsigned similar = 0;
+
+	for (image * img : images) {
+		cv::Mat mat = img->mat();
+		unsigned difference = 0;
+		unsigned differing = 0;
+
+		deque<HashCoord> diff_coords;
+		for (int y = 0; y < DIM_Y && differing <= max_diff; y++) {
+			for (int x = 0; x < DIM_X && differing <= max_diff; x++) {
+				cv::Vec3b pixela = (y < base_mat.rows && x < base_mat.cols) ? base_mat.at<cv::Vec3b>(y, x) : cv::Vec3b(0, 0, 0);
+				cv::Vec3b pixelb = (y < mat.rows && x < mat.cols) ? mat.at<cv::Vec3b>(y, x) : cv::Vec3b(0, 0, 0);
+				bool diff = false;
+				for (int c = 0; c < 3; c++) {
+					if (pixela[c] != pixelb[c]) {
+						diff = true;
+						difference += abs(pixela[c] - pixelb[c]);
+					}
+				}
+				if (diff) {
+					differing++;
+					diff_coords.push_back(HashCoord(x, y));
+				}
+			}
+		}
+
+		if (differing > 0 && differing <= max_diff) {
+			similar++;
+			fs::copy_file(img->path, sim_dir / img->path.filename(), fs::copy_option::overwrite_if_exists);
+			cout << "  " << make_relative(root, img->path) << " differs by " << difference << " in " << differing << " pixels (" << (difference/differing) << "/pixel):" << endl;
+			for (HashCoord coord : diff_coords) {
+				cout << "    " << coord.string() << ": ";
+				cv::Vec3b pixela = (coord.y < base_mat.rows && coord.x < base_mat.cols) ? base_mat.at<cv::Vec3b>(coord.y, coord.x) : cv::Vec3b(0, 0, 0);
+				cv::Vec3b pixelb = (coord.y < mat.rows && coord.x < mat.cols) ? mat.at<cv::Vec3b>(coord.y, coord.x) : cv::Vec3b(0, 0, 0);
+				cout << "(" << (ushort)pixela[0] << ", " << (ushort)pixela[1] << ", " << (ushort)pixela[2] << ") vs. ";
+				cout << "(" << (ushort)pixelb[0] << ", " << (ushort)pixelb[1] << ", " << (ushort)pixelb[2] << ")" << endl;
+			}
+		}
+	}
+
+	cout << "Found " << similar << " similar images." << endl;
+}
+
+void Write_Unique_To_File(fs::path root, fs::path file)
+{
+	cout << "Reading images...";
+
+	deque<image*> images;
+	unordered_set<uint64> image_hashes;
+	get_images(root, images, image_hashes, true);
+
+	cout << " found " << images.size() << " images." << endl;
+	cout << "Writing image paths to " << file.string() << "...";
+
+	ofstream out;
+	out.open(file.string().c_str());
+	for (image * img : images) {
+		out << img->hash << ';' << img->path << endl;
+	}
+	out.close();
+	cout << " done!" << endl;
+}
+
 int _tmain(int argc, _TCHAR* argv[])
 {
 	fs::path debug(FF8_ROOT / "tonberry\\debug");
-	fs::path analysis(debug / "analysis0");
+	//fs::path analysis(debug / "analysis0");
+	fs::path analysis("E:/Tonberry/Textures");
+	fs::path unique("E:/Tonberry/unique");
 	fs::path textures(FF8_ROOT / "textures");
 
-	//Delete_Non_Unique(debug / "unique");
-	//Copy_Unique_Left_Half(debug, debug / "analysis0");
-	//Copy_Unique_Left_Objects(analysis, analysis / "objects");
-	//return 0;
+	//Copy_Unique(analysis, unique);
+	//Write_Unique_To_File(unique, unique.parent_path() / "unique.txt");
+	//image quistis(unique / "14641241333983697.bmp", cv::Rect(0, 0, DIM_X, DIM_Y), 14641241333983697);
+	//Find_Similar_Images(quistis, unique, 100, true);
 
-	//Analyze_Pixels(analysis, debug / "object_analysis.csv");
+	Analyze_Pixels(fs::path("E:/Tonberry/unique.txt"), unique.parent_path() / "object_analysis.csv", true);
 	//Analyze_Collisions(analysis, debug / "collision_analysis.txt");
 	//getchar();
 	//return 0;
@@ -978,7 +1138,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	//Create_Hashmap(ocean2 / "original bitmaps", ocean2);
 	//return 0;
 
-	Test_Hash2_Collisions();
+	//Test_Hash2_Collisions();
 
 	//cv::Mat sel_13 = cv::imread("H:\\Game Saves\\Final Fantasy VIII\\Mods\\Berrymapper - Hash Textures\\BerryMapper\\INPUT\\sel_13.bmp", CV_LOAD_IMAGE_COLOR);
 	//cv::Mat sql_78 = cv::imread("H:\\Game Saves\\Final Fantasy VIII\\Mods\\Berrymapper - Hash Textures\\BerryMapper\\INPUT\\sql_78.bmp", CV_LOAD_IMAGE_COLOR);

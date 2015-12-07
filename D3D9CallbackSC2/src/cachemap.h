@@ -34,45 +34,54 @@ private:
 
 	typedef unordered_set<fieldset_iter, fieldset_iter_hasher> fieldset_iter_set_t;	// holds sets of fieldset_iter
 	typedef fieldset_iter_set_t::iterator fieldset_iter_set_iter;					// iterates sets of fieldset_iter
+	
+	typedef unordered_map<uint64_t, fieldset_iter_set_t> innermap_t;				// maps inner hashes to a set of matching field names; unordered for O(1) access/insertion, set for collisions
+	typedef innermap_t::iterator innermap_iter;
 
-	typedef unordered_map<uint64_t, fieldset_iter_set_t> fieldmap_t;				// maps hashes to a set of matching field names; unordered for O(1) access/insertion, set for collisions
-	typedef fieldmap_t::iterator fieldmap_iter;
+	typedef unordered_map<uint64_t, innermap_t> outermap_t;							// maps outer hashes to a map of inner hashes to sets of matching field names
+	typedef outermap_t::iterator outermap_iter;
 
-	fieldmap_t fieldmap;															// maps original texture hash to replacement texture name
+	outermap_t fieldmap;															// maps original texture hash(es) to replacement texture name
 
 public:
 
 	/* count: count matches for a given hash
-	  returns: size of fieldmap[hash]
+	   returns: size of fieldmap[hash]
 	*/
-	size_t count(uint64_t hash);
+	size_t count(uint64_t upper_hash,
+				 uint64_t lower_hash = 0);
 
-	/* insert: adds hash :-> field to the map
+	/* insert: adds upper+lower hash :-> field to the map
 	*/
-	void insert(uint64_t hash,		// map key
-				const string& field	// map value
+	void insert(uint64_t upper_hash,	// map outer key
+				uint64_t lower_hash,	// map inner key
+				const string& field		// map value
 		);
 
 	/* get_fields: returns a set of fields mapped to the given hash;
 		   if the hash does not exist in the map, an empty field is returned
 	   returns: true if the given hash is in the map, else false
 	*/
-	bool get_fields(uint64_t hash,					// the hash key
+	bool get_fields(uint64_t upper_hash,			// the upper hash / outer key
+					uint64_t lower_hash,			// the lower hash / inner key
 					unordered_set<string>& result	// the set in which to put the matches
 		);
 
 	/* get_first_field: gets the first field mapped to the given hash
-	  returns: true if the given hash is in the map, else false
+	   returns: true if the given hash is in the map, else false
 	*/
-	bool get_first_field(uint64_t hash,	// the hash key
-						string& result	// the string in which to place the result
+	bool get_first_field(uint64_t upper_hash,	// the upper hash / outer key
+						 uint64_t lower_hash,	// the lower hash / inner key
+						 string& result			// the string in which to place the result
 		);
 
 	/* get_intersection: returns the intersection of the sets of fields at the given hashes
 	   returns: true if the intersection is non-empty, else false
 	*/
-	bool get_intersection(uint64_t hash_1,				// the first hash
-						  uint64_t hash_2,				// the second hash
+	bool get_intersection(uint64_t upper_hash_1,		// the first upper hash / outer key
+						  uint64_t lower_hash_1,		// the first lower hash / inner key
+						  uint64_t upper_hash_2,		// the second upper hash / outer key
+						  uint64_t lower_hash_2,		// the second lower hash / inner key
 						  unordered_set<string>& result	// the set in which to put the intersection
 		);
 
