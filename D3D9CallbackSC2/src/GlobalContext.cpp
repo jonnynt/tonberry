@@ -18,12 +18,10 @@ typedef unsigned char uchar;
 GlobalContext *g_Context;
 
 template <typename T>
-T ToNumber(const std::string& Str)	//convert string to uint64_t
+bool ToNumber(const std::string& str, T & val)	//convert string to uint64_t
 {
-	T Number;
-	std::stringstream S(Str);
-	S >> Number;
-	return Number;
+	std::stringstream ss(str);
+	return (ss >> val);
 }
 
 /**********************************
@@ -148,11 +146,11 @@ void load_fieldmaps()
 							items.push_back(item);
 						}
 
-						// format is "<field_name>,<hash_upper>{,<hash_lower>}
-						if (!(items.size() == 2 || items.size() == 3)) {
+						// format is "<field_name>,<hash>"
+						if (!(items.size() == 2)) {
 							ofstream err;													//Error reporting
 							err.open(ERROR_LOG.string(), ofstream::out | ofstream::app);
-							err << "Error: bad hashmap. Format is \"<field_name>,<hash_combined>{,<hash_upper>,<hash_lower>}\": " << it->path().string() << endl;
+							err << "Error: bad hashmap. Format is \"<field_name>,<hash>\": " << it->path().string() << endl;
 							err.close();
 							return;
 						}
@@ -160,14 +158,10 @@ void load_fieldmaps()
 						// field names are stored only once
 						string field = items[0];
 
-						uint64_t hash_upper, hash_lower = 0;
-						hash_upper = ToNumber<uint64_t>(items[1]);
+						uint64_t hash = 0;
+						hash = ToNumber<uint64_t>(items[1]);
 
-						if (items.size() > 2) {
-							uint64_t hash_lower = ToNumber<uint64_t>(items[2]);
-						}
-
-						fieldmap->insert(hash_upper, hash_lower, field);
+						fieldmap->insert(hash, field);
 					}
 					hashfile.close();
 				} else {
