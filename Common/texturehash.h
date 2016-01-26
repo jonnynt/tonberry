@@ -100,9 +100,8 @@ namespace Murmur2
 	uint64 Murmur2_Hash(const cv::Mat& img, std::deque<HashCoord> coords);
 	uint64 Murmur2_Hash(const cv::Mat& img);
 
-	uint64 Murmur_Hash_Combined(cv::Mat img, uint64& hash_upper, uint64& hash_lower, const HashCoord* coords, const size_t len);
-	uint64 Murmur_Hash_Combined(cv::Mat img, uint64& hash_upper, uint64& hash_lower);
-
+	uint64 Murmur2_Hash_Combined(cv::Mat img, uint64& hash_upper, uint64& hash_lower, const HashCoord* coords, const size_t len);
+	uint64 Murmur2_Hash_Combined_Naive(cv::Mat img, uint64& hash_upper, uint64& hash_lower, const HashCoord* coords, const size_t len);
 }
 }
 

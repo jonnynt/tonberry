@@ -96,7 +96,7 @@ private:
 	typedef unordered_map<HANDLE, uint64_t>				handlecache_t;			// maps a handle to a hash that has an entry in a nhcache_map_t
 	typedef handlecache_t::iterator						handlecache_iter;
 
-	typedef unordered_multimap<uint64_t, HANDLE>			reverse_handlecache_t;	// reverse indexing of handlecache; needed for when values in handlecache are removed from the nhcache
+	typedef unordered_multimap<uint64_t, HANDLE>		reverse_handlecache_t;	// reverse indexing of handlecache; needed for when values in handlecache are removed from the nhcache
 	typedef reverse_handlecache_t::iterator				reverse_handlecache_iter;
 
 	// together these make nhcache:

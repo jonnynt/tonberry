@@ -18,7 +18,7 @@ typedef unsigned char uchar;
 GlobalContext *g_Context;
 
 template <typename T>
-bool ToNumber(const std::string& str, T & val)	//convert string to uint64_t
+bool ToNumber(const std::string& str, T & val)							// convert string to uint64_t
 {
 	std::stringstream ss(str);
 	return (ss >> val);
@@ -146,11 +146,11 @@ void load_fieldmaps()
 							items.push_back(item);
 						}
 
-						// format is "<field_name>,<hash>"
-						if (!(items.size() == 2)) {
+						// format is "<field_name>,<hash_combined>{,<hash_upper>,<hash_lower>}"
+						if (!(items.size() == 2 || items.size() == 4)) {
 							ofstream err;													//Error reporting
 							err.open(ERROR_LOG.string(), ofstream::out | ofstream::app);
-							err << "Error: bad hashmap. Format is \"<field_name>,<hash>\": " << it->path().string() << endl;
+							err << "Error: bad hashmap. Format is \"<field_name>,<hash_combined>{,<hash_upper>,<hash_lower>}\": " << it->path.str() << endl;
 							err.close();
 							return;
 						}
@@ -158,10 +158,33 @@ void load_fieldmaps()
 						// field names are stored only once
 						string field = items[0];
 
-						uint64_t hash = 0;
-						hash = ToNumber<uint64_t>(items[1]);
+						uint64_t hash_combined;
+						if (!ToNumber<uint64_t>(items[1], hash_combined)) {
+							ofstream err;													//Error reporting
+							err.open(ERROR_LOG.string(), ofstream::out | ofstream::app);
+							err << "Error: bad hashmap entry. Must be an integer: " << items[1] << endl;
+							err.close();
+						} else
+							fieldmap->insert(hash_combined, field);
 
-						fieldmap->insert(hash, field);
+						if (items.size() > 2) {
+							uint64_t hash_upper, hash_lower;
+							if (!ToNumber<uint64_t>(items[2], hash_upper)) {
+								ofstream err;												//Error reporting
+								err.open(ERROR_LOG.string(), ofstream::out | ofstream::app);
+								err << "Error: bad hashmap entry. Must be an integer: " << items[2] << endl;
+								err.close();
+							} else
+								fieldmap->insert(hash_upper, field);
+
+							if (!ToNumber<uint64_t>(items[3], hash_lower)) {
+								ofstream err;												//Error reporting
+								err.open(ERROR_LOG.string(), ofstream::out | ofstream::app);
+								err << "Error: bad hashmap entry. Must be an integer: " << items[3] << endl;
+								err.close();
+							} else
+								fieldmap->insert(hash_lower, field);
+						}
 					}
 					hashfile.close();
 				} else {
@@ -225,14 +248,55 @@ uint64_t Murmur2_Hash(BYTE* pData, UINT pitch, int width, int height, const Hash
 	return hash;
 }
 
-bool get_fields(const uint64_t& hash_upper, const uint64_t& hash_lower, string& field_combined, string& field_upper, string& field_lower)
+uint64_t Murmur2_Combined(BYTE* pData, UINT pitch, int width, int height, const HashCoord* coords, const int len, uint64_t hash_upper, uint64_t hash_lower)
+{
+	int buflen = len * 3 * 2;
+	BYTE* buf = new BYTE[buflen];
+	memset(buf, 0, sizeof(BYTE) * buflen);
+	int index = 0;
+
+	BYTE* data = pData;
+	const HashCoord* coord = coords;
+	for (int i = 0; i < len; i++, coord++) {
+		RGBColor color(0, 0, 0);
+		if (coord->x < width && coord->y < height)
+			color = *((RGBColor*)(data + (coord->y * pitch) + coord->x));
+		buf[index++] = color.r;
+		buf[index++] = color.g;
+		buf[index++] = color.b;
+	}
+
+	hash_upper = TextureHash::Murmur2::MurmurHash64B(buf, buflen, TextureHash::Murmur2::MURMUR2_SEED);
+
+	if (height > (VRAM_DIM / 2)) {		// there is a lower half to hash
+		data = pData + (VRAM_DIM / 2) * pitch;
+		height -= (VRAM_DIM / 2);
+		coord = coords;
+		for (int i = 0; i < len; i++, coord++) {
+			RGBColor color(0, 0, 0);
+			if (coord->x < width && coord->y < height)
+				color = *((RGBColor*)(data + (coord->y * pitch) + coord->x));
+			buf[index++] = color.r;
+			buf[index++] = color.g;
+			buf[index++] = color.b;
+		}
+	}
+
+	uint64_t hash_combined = TextureHash::Murmur2::MurmurHash64B(buf, buflen, TextureHash::Murmur2::MURMUR2_SEED);
+	memset(buf, 0, sizeof(BYTE) * buflen / 2);
+	hash_lower = TextureHash::Murmur2::MurmurHash64B(buf, buflen, TextureHash::Murmur2::MURMUR2_SEED);
+	delete[] buf;
+	return hash_combined;
+}
+
+bool get_fields(const uint64_t& hash_combined, const uint64_t& hash_upper, const uint64_t& hash_lower, string& field_combined, string& field_upper, string& field_lower)
 {
 	unordered_set<string> fields;
 	int upper_matches = 0, lower_matches = 0;
 
 	// search for hash_combined
 	if (fieldmap->get_fields(hash_combined, fields)) {
-		field_combined = *(fields.begin());									// a field matches whole texture: use this one
+		field_combined = *(fields.begin());										// a field matches whole texture: use this one
 		return true;
 	}
 
@@ -387,8 +451,7 @@ HANDLE create_newhandle(BYTE* replaced_pData, UINT replaced_width, UINT replaced
 }
 
 
-//Then the unlockrect
-void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE Handle) //note BmpUseless
+void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE Handle) // note BmpUseless
 {
 	IDirect3DTexture9* pTexture = (IDirect3DTexture9*)Handle;
 
@@ -397,19 +460,19 @@ void GlobalContext::UnlockRect(D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDLE
 	ofstream debug(DEBUG_LOG.string(), ofstream::out | ofstream::app);
 
 	bool handle_used = false;													// if false, Handle will be erased from the TextureCache
-	if (pTexture && Desc.Width < 640 && Desc.Height < 480 && Desc.Format == D3DFORMAT::D3DFMT_A8R8G8B8 && Desc.Pool == D3DPOOL::D3DPOOL_MANAGED)    //640x480 are video
-	{
+	if (pTexture && Desc.Width < 640 && Desc.Height < 480 && Desc.Format == D3DFORMAT::D3DFMT_A8R8G8B8 && Desc.Pool == D3DPOOL::D3DPOOL_MANAGED) {   //640x480 are video
 		D3DLOCKED_RECT Rect;
 		pTexture->LockRect(0, &Rect, NULL, 0);
 		UINT pitch = (UINT)Rect.Pitch;
 		BYTE* pData = (BYTE*)Rect.pBits;
 
-		// get field matches using FNV hash
+		// get field matches using Murmur2 hash
 		uint64_t hash_combined = 0, hash_upper = 0, hash_lower = 0;
 		string field_combined = "", field_upper = "", field_lower = "";
+		bool upper_exists = false, lower_exists = false;
 
 		// get hashes
-		hash_combined = FNV_Hash_Combined(pData, pitch, Desc.Width, Desc.Height, hash_upper, hash_lower, FNV_COORDS, FNV_COORDS_LEN, true);
+		hash_combined = Murmur2_Combined(pData, pitch, Desc.Width, Desc.Height, COORDS, COORDS_LEN, hash_upper, hash_lower);
 
 		uint64_t hash_used;
 		bool use_combined = cache->contains(hash_combined);

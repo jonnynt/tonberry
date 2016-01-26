@@ -386,8 +386,8 @@ void Analyze_Pixels(fs::path analysis, fs::path dest, bool name_is_hash = false)
 		int block_width = 6;
 		int block_height = 6;
 
-		for (int y = 2; y < DIM_Y - block_height; y += block_height + 1) {
-			for (int x = 2; x < DIM_X - block_width; x += block_width + 1) {
+		for (int y = 1; y < DIM_Y - block_height; y += block_height + 1) {
+			for (int x = 1; x < DIM_X - block_width; x += block_width + 1) {
 				HashCoord best;
 				unsigned long low_mode = ULONG_MAX;
 				//long double low_mode = LDBL_MAX;
@@ -1118,6 +1118,35 @@ void Write_Unique_To_File(fs::path root, fs::path file)
 
 int _tmain(int argc, _TCHAR* argv[])
 {
+	// test Murmur2_Combined
+	fs::path test_file("E:/Tonberry/Textures/Magic Animations/7167.bmp");
+	uint64 hash_upper_i, hash_lower_i;
+	uint64 hash_combined, hash_upper_c, hash_lower_c;
+
+	cv::Mat img = cv::imread(test_file.string());
+	hash_upper_i = Murmur2_Hash(img, COORDS, COORDS_LEN);
+	//hash_lower_i = Murmur2_Hash(img(cv::Rect(0, DIM_Y, img.cols, img.rows - DIM_Y)), COORDS, COORDS_LEN);
+
+	//cout << "Upper (Individual):\t" << hash_upper_i << endl;
+	//cout << "Lower (Individual):\t" << hash_lower_i << endl;
+
+	//hash_combined = Murmur2_Hash_Combined_Naive(img, hash_upper_c, hash_lower_c, COORDS, COORDS_LEN);
+
+	//cout << "Upper (Combined):\t" << hash_upper_c << endl;
+	//cout << "Lower (Combined):\t" << hash_lower_c << endl;
+	//cout << "Combined:\t\t" << hash_combined << endl;
+
+	//cout << "Match: " << ((hash_upper_i == hash_upper_c && hash_lower_i == hash_lower_c) ? "yes" : "no") << endl;
+
+	Murmur2_Hash_Combined(img, hash_upper_c, hash_lower_c, COORDS, COORDS_LEN);
+
+	cout << "Upper (Individual):\t" << hash_upper_i << endl;
+	cout << "Upper (Individual):\t" << hash_upper_c << endl;
+	cout << "Match " << ((hash_upper_c == hash_upper_i) ? "yes" : "no") << endl;
+
+	getchar();
+	return 0;
+
 	fs::path debug(FF8_ROOT / "tonberry\\debug");
 	//fs::path analysis(debug / "analysis0");
 	fs::path analysis("E:/Tonberry/Textures");
