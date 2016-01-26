@@ -93,6 +93,9 @@ namespace Murmur2
 	using namespace FNV_Murmur2_Shared;
 
 	const uint64 MURMUR2_SEED = 0x6d6176697269636b;
+	const uint32 m = 0x5bd1e995;
+	const int r = 24;
+
 	uint64 MurmurHash64B(const void * key, int len, uint64 seed = MURMUR2_SEED);
 
 	uint64 Murmur2_Full(const cv::Mat& img);
@@ -100,8 +103,8 @@ namespace Murmur2
 	uint64 Murmur2_Hash(const cv::Mat& img, std::deque<HashCoord> coords);
 	uint64 Murmur2_Hash(const cv::Mat& img);
 
-	uint64 Murmur2_Hash_Combined(cv::Mat img, uint64& hash_upper, uint64& hash_lower, const HashCoord* coords, const size_t len);
-	uint64 Murmur2_Hash_Combined_Naive(cv::Mat img, uint64& hash_upper, uint64& hash_lower, const HashCoord* coords, const size_t len);
+	uint64 Murmur2_Hash_Combined(cv::Mat& img, uint64& hash_upper, uint64& hash_lower, const HashCoord* coords, const size_t len);
+	uint64 Murmur2_Hash_Combined_Naive(cv::Mat& img, uint64& hash_upper, uint64& hash_lower, const HashCoord* coords, const size_t len);
 }
 }
 

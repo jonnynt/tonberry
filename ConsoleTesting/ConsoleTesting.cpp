@@ -1120,29 +1120,28 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	// test Murmur2_Combined
 	fs::path test_file("E:/Tonberry/Textures/Magic Animations/7167.bmp");
-	uint64 hash_upper_i, hash_lower_i;
-	uint64 hash_combined, hash_upper_c, hash_lower_c;
+	//uint64 hash_ui, hash_li;
+	uint64 hash_cn, hash_ucn, hash_lcn;
+	uint64 hash_c, hash_uc, hash_lc;
 
 	cv::Mat img = cv::imread(test_file.string());
-	hash_upper_i = Murmur2_Hash(img, COORDS, COORDS_LEN);
-	//hash_lower_i = Murmur2_Hash(img(cv::Rect(0, DIM_Y, img.cols, img.rows - DIM_Y)), COORDS, COORDS_LEN);
 
-	//cout << "Upper (Individual):\t" << hash_upper_i << endl;
-	//cout << "Lower (Individual):\t" << hash_lower_i << endl;
+	//hash_ui = Murmur2_Hash(img, COORDS, COORDS_LEN);
 
-	//hash_combined = Murmur2_Hash_Combined_Naive(img, hash_upper_c, hash_lower_c, COORDS, COORDS_LEN);
+	//cout << "Upper (Individual):\t" << hash_ui << endl;
 
-	//cout << "Upper (Combined):\t" << hash_upper_c << endl;
-	//cout << "Lower (Combined):\t" << hash_lower_c << endl;
-	//cout << "Combined:\t\t" << hash_combined << endl;
+	hash_cn = Murmur2_Hash_Combined_Naive(img, hash_ucn, hash_lcn, COORDS, COORDS_LEN);
 
-	//cout << "Match: " << ((hash_upper_i == hash_upper_c && hash_lower_i == hash_lower_c) ? "yes" : "no") << endl;
+	cout << "Upper (Naive):\t\t" << hash_ucn << endl;
+	cout << "Lower (Naive):\t\t" << hash_lcn << endl;
+	cout << "Combined (Naive):\t" << hash_cn << endl;
 
-	Murmur2_Hash_Combined(img, hash_upper_c, hash_lower_c, COORDS, COORDS_LEN);
+	hash_c = Murmur2_Hash_Combined(img, hash_uc, hash_lc, COORDS, COORDS_LEN);
 
-	cout << "Upper (Individual):\t" << hash_upper_i << endl;
-	cout << "Upper (Individual):\t" << hash_upper_c << endl;
-	cout << "Match " << ((hash_upper_c == hash_upper_i) ? "yes" : "no") << endl;
+	cout << "Upper:\t\t\t" << hash_uc << endl;
+	cout << "Lower:\t\t\t" << hash_lc << endl;
+	cout << "Combined:\t\t" << hash_c << endl;
+	cout << "Match " << ((hash_c == hash_cn) ? "yes" : "no") << endl;
 
 	getchar();
 	return 0;

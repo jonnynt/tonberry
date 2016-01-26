@@ -434,6 +434,7 @@ namespace TextureHash
 
 			uint32 h1 = uint32(seed) ^ len;
 			uint32 h2 = uint32(seed >> 32);
+			//std::cout << "Rem = " << len << "; h1 = " << h1 << "; h2 = " << h2 << std::endl;
 
 			const uint32 * data = (const uint32 *)key;
 
@@ -447,6 +448,9 @@ namespace TextureHash
 				k2 *= m; k2 ^= k2 >> r; k2 *= m;
 				h2 *= m; h2 ^= k2;
 				len -= 4;
+
+				//std::cout << "k1 = " << k1 << "; k2 = " << k2 << std::endl;
+				//std::cout << "Rem = " << len << "; h1 = " << h1 << "; h2 = " << h2 << std::endl;
 			}
 
 			if (len >= 4) {
@@ -455,6 +459,7 @@ namespace TextureHash
 				h1 *= m; h1 ^= k1;
 
 				len -= 4; std::cout << "k1 = " << k1 << ";" << std::endl;
+				//std::cout << "Rem = " << len << "; h1 = " << h1 << "; h2 = " << h2 << std::endl;
 			}
 
 			switch (len) {
@@ -552,7 +557,7 @@ namespace TextureHash
 			return Murmur2_Hash(img, COORDS, COORDS_LEN);
 		}
 
-		uint64 Murmur2_Hash_Combined_Naive(cv::Mat img, uint64& hash_upper, uint64& hash_lower, const HashCoord* coords, const size_t len)
+		uint64 Murmur2_Hash_Combined_Naive(cv::Mat& img, uint64& hash_upper, uint64& hash_lower, const HashCoord* coords, const size_t len)
 		{
 			int buflen = len * 3;
 			uchar* buf_upper = new uchar[buflen * 2];
@@ -601,141 +606,65 @@ namespace TextureHash
 			return TextureHash::Murmur2::MurmurHash64B(buf_combined, buflen * 2, TextureHash::Murmur2::MURMUR2_SEED);
 		}
 
-		uint64 Murmur2_Hash_Combined(cv::Mat img, uint64& hash_upper, uint64& hash_lower, const HashCoord* coords, const size_t len)
+		inline cv::Vec3b get_correct_pixel(int rem, cv::Mat & img, const HashCoord* coords, const size_t len, bool use_mod = true)
 		{
-			const uint32 m = 0x5bd1e995;
-			const int r = 24;
+			int mod = (VRAM_DIM / 2);
+			const HashCoord* coord;
+			if (rem > len) {
+				coord = coords + len * 2 - rem;
+				return img.at<cv::Vec3b>(coord->y, coord->x);
+			}
+			coord = coords + len - rem;
+			return (use_mod) ? img.at<cv::Vec3b>(coord->y + mod, coord->x) : img.at<cv::Vec3b>(coord->y, coord->x);
+		}
 
-			uint32 h1_u = uint32(TextureHash::Murmur2::MURMUR2_SEED) ^ (len * 3);
-			uint32 h2_u = uint32(TextureHash::Murmur2::MURMUR2_SEED >> 32);
-
-			uint32 h1_l = uint32(TextureHash::Murmur2::MURMUR2_SEED) ^ (len * 3);
-			uint32 h2_l = uint32(TextureHash::Murmur2::MURMUR2_SEED >> 32);
-
-			const HashCoord* coord = coords;
-			int rem = len;
-
+		inline void murmur2_rem4(uint32& h1, uint32& h2, uint32& rem, cv::Mat& img, const HashCoord* coords, const size_t len, bool use_mod = true)
+		{
 			cv::Vec3b pixel1, pixel2;
-			while (rem >= 8) {
-				uint32 k;
+			uint32 k;
 
-				// k1, pixel 1rgb + 2r; reverse endianness: 2r | 1b | 1g | 1r
-				k = 0;
+			// k1, pixel 1rgb + 2r; reverse endianness: 2r | 1b | 1g | 1r
+			k = 0;
 
-				pixel1 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
-				pixel2 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
+			pixel1 = get_correct_pixel(rem--, img, coords, len, use_mod);
+			pixel2 = get_correct_pixel(rem--, img, coords, len, use_mod);
 
-				k |= pixel2[0] << 24 | pixel1[2] << 16 | pixel1[1] << 8 | pixel1[0];
+			k |= pixel2[0] << 24 | pixel1[2] << 16 | pixel1[1] << 8 | pixel1[0];
 
-				k *= m; k ^= k >> r; k *= m;
-				h1_u *= m; h1_u ^= k;
+			k *= m; k ^= k >> r; k *= m;
+			h1 *= m; h1 ^= k;
 
-				// k2, pixel 2gb + 3rg; reverse endianness: 3g | 3r | 2b | 2g
-				k = 0;
+			//std::cout << "k1 = " << k << "; ";
 
-				pixel1 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
+			// k2, pixel 2gb + 3rg; reverse endianness: 3g | 3r | 2b | 2g
+			k = 0;
 
-				k |= pixel1[1] << 24 | pixel1[0] << 16 | pixel2[2] << 8 | pixel2[1];
+			pixel1 = get_correct_pixel(rem--, img, coords, len, use_mod);
 
-				k *= m; k ^= k >> r; k *= m;
-				h2_u *= m; h2_u ^= k;
+			k |= pixel1[1] << 24 | pixel1[0] << 16 | pixel2[2] << 8 | pixel2[1];
 
-				// k1, pixel 3b + 4rgb; reverse endianness: 4b | 4g | 4r | 3b
-				k = 0;
+			k *= m; k ^= k >> r; k *= m;
+			h2 *= m; h2 ^= k;
 
-				pixel2 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
+			//std::cout << "k2 = " << k << std::endl;
 
-				k |= pixel2[2] << 24 | pixel2[1] << 16 | pixel2[0] << 8 | pixel1[2];
+			//std::cout << "Rem = " << rem * 3 + 2 << "; h1 = " << h1 << "; h2 = " << h2 << std::endl;
 
-				k *= m; k ^= k >> r; k *= m;
-				h1_u *= m; h1_u ^= k;
+			// k1, pixel 3b + 4rgb; reverse endianness: 4b | 4g | 4r | 3b
+			k = 0;
 
-				// k2, pixel 5rgb + 6r; reverse endianness: 6r | 5b | 5g | 5r
-				k = 0;
+			pixel2 = get_correct_pixel(rem--, img, coords, len, use_mod);
 
-				pixel1 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
-				pixel2 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
+			k |= pixel2[2] << 24 | pixel2[1] << 16 | pixel2[0] << 8 | pixel1[2];
 
-				k |= pixel2[0] << 24 | pixel1[2] << 16 | pixel1[1] << 8 | pixel1[0];
+			k *= m; k ^= k >> r; k *= m;
+			h1 *= m; h1 ^= k;
 
-				k *= m; k ^= k >> r; k *= m;
-				h2_u *= m; h2_u ^= k;
+			//std::cout << "k1 = " << k << ";";
+		}
 
-				// k1, pixel 6gb + 7rg; reverse endianness: 7g | 7r | 6b | 6g
-				k = 0;
-
-				pixel1 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
-
-				k |= pixel1[1] << 24 | pixel1[0] << 16 | pixel2[2] << 8 | pixel2[1];
-
-				k *= m; k ^= k >> r; k *= m;
-				h1_u *= m; h1_u ^= k;
-
-				// k2, pixel 7b + 8rgb; reverse endianness: 8b | 8g | 8r | 7b
-				k = 0;
-
-				pixel2 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
-
-				k |= pixel2[2] << 24 | pixel2[1] << 16 | pixel2[0] << 8 | pixel1[2];
-
-				k *= m; k ^= k >> r; k *= m;
-				h2_u *= m; h2_u ^= k;
-
-				rem -= 8;
-				//std::cout << "After " << (len - rem) << " - h1 = " << h1_u << "; h2 = " << h2_u << std::endl;
-			}
-
-			// TODO: save current hash progress for hash_combined
-
-			if (rem >= 4) {
-				uint32 k;
-
-				// k1, pixel 1rgb + 2r; reverse endianness: 2r | 1b | 1g | 1r
-				k = 0;
-
-				pixel1 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
-				pixel2 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
-
-				k |= pixel2[0] << 24 | pixel1[2] << 16 | pixel1[1] << 8 | pixel1[0];
-
-				k *= m; k ^= k >> r; k *= m;
-				h1_u *= m; h1_u ^= k;
-
-				// k2, pixel 2gb + 3rg; reverse endianness: 3g | 3r | 2b | 2g
-				k = 0;
-
-				pixel1 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
-
-				k |= pixel1[1] << 24 | pixel1[0] << 16 | pixel2[2] << 8 | pixel2[1];
-
-				k *= m; k ^= k >> r; k *= m;
-				h2_u *= m; h2_u ^= k;
-
-				// k1, pixel 3b + 4rgb; reverse endianness: 4b | 4g | 4r | 3b
-				k = 0;
-
-				pixel2 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
-
-				k |= pixel2[2] << 24 | pixel2[1] << 16 | pixel2[0] << 8 | pixel1[2];
-
-				k *= m; k ^= k >> r; k *= m;
-				h1_u *= m; h1_u ^= k;
-
-				rem -= 4;
-			}
-
+		inline void murmur2_rem32(cv::Vec3b& pixel1, cv::Vec3b& pixel2, bool swap, uint32& h1, uint32& h2, uint32 rem, cv::Mat& img, const HashCoord* coords, const size_t len, bool use_mod = true)
+		{
 			switch (rem) {
 			case 3:
 				uint32 k;
@@ -743,59 +672,279 @@ namespace TextureHash
 				// k1, pixel 1rgb + 2r; reverse endianness: 2r | 1b | 1g | 1r
 				k = 0;
 
-				pixel1 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
-				pixel2 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
+				pixel1 = get_correct_pixel(rem--, img, coords, len, use_mod);
+				pixel2 = get_correct_pixel(rem--, img, coords, len, use_mod);
 
 				k |= pixel2[0] << 24 | pixel1[2] << 16 | pixel1[1] << 8 | pixel1[0];
 
 				k *= m; k ^= k >> r; k *= m;
-				h1_u *= m; h1_u ^= k;
+
+				if (swap) {
+					h2 *= m; h2 ^= m;
+					//std::cout << "k2 = " << k << std::endl;
+				} else {
+					h1 *= m; h1 ^= k;
+					//std::cout << "k1 = " << k << "; ";
+				}
+
 
 				// k2, pixel 2gb + 3rg; reverse endianness: 3g | 3r | 2b | 2g
 				k = 0;
 
-				pixel1 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
+				pixel1 = get_correct_pixel(rem--, img, coords, len, use_mod);
 
 				k |= pixel1[1] << 24 | pixel1[0] << 16 | pixel2[2] << 8 | pixel2[1];
 
 				k *= m; k ^= k >> r; k *= m;
-				h2_u *= m; h2_u ^= k;
 
-				// k2, only pixel 3b remaining
-				h2_u ^= pixel1[2];
-				h2_u *= m;
-
-				rem -= 3;
+				if (swap) {
+					h1 *= m; h1 ^= k;
+					//std::cout << "k1 = " << k << ";" << std::endl;
+				} else {
+					h2 *= m; h2 ^= m;
+					//std::cout << "k2 = " << k << std::endl;
+				}
 				break;
 			case 2:
 				// k1, pixel 1rgb + 2r; reverse endianness: 2r | 1b | 1g | 1r
 				k = 0;
 
-				pixel1 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
-				pixel2 = img.at<cv::Vec3b>(coord->y, coord->x);
-				coord++;
+				pixel1 = get_correct_pixel(rem--, img, coords, len, use_mod);
+				pixel2 = get_correct_pixel(rem--, img, coords, len, use_mod);
 
 				k |= pixel2[0] << 24 | pixel1[2] << 16 | pixel1[1] << 8 | pixel1[0];
 
 				k *= m; k ^= k >> r; k *= m;
-				h1_u *= m; h1_u ^= k;
+
+				if (swap) {
+					h2 *= m; h2 ^= m;
+					//std::cout << "k2 = " << k << std::endl;
+				} else {
+					h1 *= m; h1 ^= k;
+					//std::cout << "k1 = " << k << ";" << std::endl;
+				}
 
 				// k2, only pixel 2gb remaining
-				h2_u ^= pixel2[1] << 8;
-				h2_u ^= pixel2[2];
-				h2_u *= m;
+				h2 ^= pixel2[1] << 8;
+				h2 ^= pixel2[2];
+				h2 *= m;
+				break;
+			}
+		}
 
+		inline void murmur2_finish(uint32& h1, uint32& h2, uint32 rem, cv::Mat& img, const HashCoord* coords, const size_t len)
+		{
+			cv::Vec3b pixel1, pixel2;
+
+			bool swap = false;
+			if (rem >= 4) {
+				swap = true;
+				murmur2_rem4(h1, h2, rem, img, coords, len);
+			}
+
+			if (rem > 1) murmur2_rem32(pixel1, pixel2, swap, h1, h2, rem, img, coords, len);
+
+			switch (rem) {
+			case 3:
+				// k2, only pixel 3b remaining
+				rem -= 3;
+				h2 ^= pixel1[2];
+				h2 *= m;
+				break;
+			case 2:
+				// k2, only pixel 2gb remaining
 				rem -= 2;
+				h2 ^= pixel2[1] << 8;
+				h2 ^= pixel2[2];
+				h2 *= m;
 				break;
 			case 1:
 				// k2, only pixel 1rgb remaining
-				h2_u ^= pixel1[0] << 16;
-				h2_u ^= pixel1[1] << 8;
-				h2_u ^= pixel1[2];
+				pixel1 = get_correct_pixel(rem--, img, coords, len);
+
+				h2 ^= pixel1[0] << 16;
+				h2 ^= pixel1[1] << 8;
+				h2 ^= pixel1[2];
+			}
+
+			h1 ^= h2 >> 18; h1 *= m;
+			h2 ^= h1 >> 22; h2 *= m;
+			h1 ^= h2 >> 17; h1 *= m;
+			h2 ^= h1 >> 19; h2 *= m;
+		}
+
+		uint64 Murmur2_Hash_Combined(cv::Mat& img, uint64& hash_upper, uint64& hash_lower, const HashCoord* coords, const size_t len)
+		{
+			uint32 h1_u;
+			uint32 h2_u;
+
+			uint32 h1_l = uint32(TextureHash::Murmur2::MURMUR2_SEED) ^ (len * 3 * 2);
+			uint32 h2_l = uint32(TextureHash::Murmur2::MURMUR2_SEED >> 32);
+
+			uint32 h1_c = uint32(TextureHash::Murmur2::MURMUR2_SEED) ^ (len * 3 * 2);
+			uint32 h2_c = uint32(TextureHash::Murmur2::MURMUR2_SEED >> 32);
+
+			const HashCoord* coord = coords;
+			uint32 rem = len * 2;
+			//std::cout << "Rem = " << rem * 3 << "; h1 = " << h1_u << "; h2 = " << h2_u << std::endl;
+
+			cv::Vec3b pixel1, pixel2;
+			while (rem >= 8) {
+				// save hash_upper progress
+				if ((rem - len) < 8) (h1_u = h1_c) && (h2_u = h2_c);
+				uint32 k;
+
+				// k1, pixel 1rgb + 2r; reverse endianness: 2r | 1b | 1g | 1r
+				k = 0;
+
+				pixel1 = get_correct_pixel(rem--, img, coords, len);
+				pixel2 = get_correct_pixel(rem--, img, coords, len);
+
+				k |= pixel2[0] << 24 | pixel1[2] << 16 | pixel1[1] << 8 | pixel1[0];
+
+				k *= m; k ^= k >> r; k *= m;
+				h1_c *= m; h1_c ^= k;
+
+				//std::cout << "k1 = " << k << "; ";
+
+				// k2, pixel 2gb + 3rg; reverse endianness: 3g | 3r | 2b | 2g
+				k = 0;
+
+				pixel1 = get_correct_pixel(rem--, img, coords, len);
+
+				k |= pixel1[1] << 24 | pixel1[0] << 16 | pixel2[2] << 8 | pixel2[1];
+
+				k *= m; k ^= k >> r; k *= m;
+				h2_c *= m; h2_c ^= k;
+
+				//std::cout << "k2 = " << k << std::endl;
+
+				//std::cout << "Rem = " << rem * 3 + 2 << "; h1 = " << h1_c << "; h2 = " << h2_c << std::endl;
+
+				// k1, pixel 3b + 4rgb; reverse endianness: 4b | 4g | 4r | 3b
+				k = 0;
+
+				pixel2 = get_correct_pixel(rem--, img, coords, len);
+
+				k |= pixel2[2] << 24 | pixel2[1] << 16 | pixel2[0] << 8 | pixel1[2];
+
+				k *= m; k ^= k >> r; k *= m;
+				h1_c *= m; h1_c ^= k;
+
+				//std::cout << "k1 = " << k << "; ";
+
+				// k2, pixel 5rgb + 6r; reverse endianness: 6r | 5b | 5g | 5r
+				k = 0;
+
+				pixel1 = get_correct_pixel(rem--, img, coords, len);
+				pixel2 = get_correct_pixel(rem--, img, coords, len);
+
+				k |= pixel2[0] << 24 | pixel1[2] << 16 | pixel1[1] << 8 | pixel1[0];
+
+				k *= m; k ^= k >> r; k *= m;
+				h2_c *= m; h2_c ^= k;
+
+				//std::cout << "k2 = " << k << std::endl;
+
+				//std::cout << "Rem = " << rem * 3 << "; h1 = " << h1_c << "; h2 = " << h2_c << std::endl;
+
+				// k1, pixel 6gb + 7rg; reverse endianness: 7g | 7r | 6b | 6g
+				k = 0;
+
+				pixel1 = get_correct_pixel(rem--, img, coords, len);
+
+				k |= pixel1[1] << 24 | pixel1[0] << 16 | pixel2[2] << 8 | pixel2[1];
+
+				k *= m; k ^= k >> r; k *= m;
+				h1_c *= m; h1_c ^= k;
+
+				//std::cout << "k1 = " << k << "; ";
+
+				// k2, pixel 7b + 8rgb; reverse endianness: 8b | 8g | 8r | 7b
+				k = 0;
+
+				pixel2 = get_correct_pixel(rem--, img, coords, len);
+
+				k |= pixel2[2] << 24 | pixel2[1] << 16 | pixel2[0] << 8 | pixel1[2];
+
+				k *= m; k ^= k >> r; k *= m;
+				h2_c *= m; h2_c ^= k;
+
+				//std::cout << "k2 = " << k << std::endl;
+
+				//std::cout << "Rem = " << rem * 3 << "; h1 = " << h1_c << "; h2 = " << h2_c << std::endl;
+
+				//std::cout << "After " << (len - rem) << " - h1 = " << h1_c << "; h2 = " << h2_c << std::endl;
+			}
+
+			// finish hash_combined
+			murmur2_finish(h1_c, h2_c, rem, img, coords, len);
+
+			// finish hash_upper
+			rem = len % 8;
+			bool swap = false;
+			if (rem >= 4) {
+				swap = true;
+				murmur2_rem4(h1_u, h2_u, rem, img, coords, len, false);
+			}
+			if (rem > 1) murmur2_rem32(pixel1, pixel2, swap, h1_u, h2_u, rem, img, coords, len, false);
+			switch (rem) {
+			case 3:
+				uint32 k;
+				// k1, only pixel 3b remaining; reverse endianness: 0 | 0 | 0 | 3b
+				k = pixel1[2];
+
+				k *= m; k ^= k >> r; k *= m;
+
+				if (swap) {
+					h2_u *= m; h2_u ^= m;
+					//std::cout << "k2 = " << k << std::endl;
+				} else {
+					h1_u *= m; h1_u ^= k;
+					//std::cout << "k1 = " << k << "; ";
+				}
+
+				break;
+			case 2:
+				// k2, only pixel 2gb remaining; reverse enianness: 0 | 0 | 2b | 2g
+				k = pixel2[2] << 8 | pixel2[1];
+				
+				k *= m; k ^= k >> r; k *= m;
+
+				if (swap) {
+					h1_u *= m; h1_u ^= k;
+					//std::cout << "k1 = " << k << "; ";
+				} else {
+					h2_u *= m; h2_u ^= m;
+					//std::cout << "k2 = " << k << std::endl;
+				}
+
+				break;
+			case 1:
+				// only pixel 1rgb remaining; reverse endianness: 0 | 1b | 1g | 1r
+				pixel1 = get_correct_pixel(rem--, img, coords, len);
+
+				k = pixel1[2] << 24 | pixel1[1] << 16 | pixel1[0];
+
+				if (swap) {
+					h2_u *= m; h2_u ^= m;
+					//std::cout << "k2 = " << k << std::endl;
+				} else {
+					h1_u *= m; h1_u ^= k;
+					//std::cout << "k1 = " << k << "; ";
+				}
+
+				break;
+			case 0:
+				// need to do all |len| pixels worth of 0s
+				for (int i = 0; i < len * 3 - 8; i += 8) {
+					h1_u *= m;
+					h2_u *= m;
+				}
+
+				if (swap) {				// means rem = 4
+					h2_u *= m;
+				}
 			}
 
 			h1_u ^= h2_u >> 18; h1_u *= m;
@@ -805,7 +954,7 @@ namespace TextureHash
 
 			hash_upper = uint64(h1_u) << 32 | h2_u;
 
-			return 0;
+			return uint64(h1_c) << 32 | h2_c;
 			//if (height > VRAM_DIM / 2) rem += len;		// there is a lower portion to hash
 		}
 
